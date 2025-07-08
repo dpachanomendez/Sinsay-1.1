@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SinSay - Convertidor de Texto a Voz</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script>
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const messageDiv = document.getElementById('message');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const audioSource = document.getElementById('audioSource');
+
+            if (fileInput.files.length === 0) {
+                messageDiv.textContent = 'Por favor, selecciona un archivo.';
+                messageDiv.setAttribute('aria-live', 'assertive');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            messageDiv.textContent = 'Procesando archivo...';
+            messageDiv.setAttribute('aria-live', 'assertive');
+            audioPlayer.style.display = 'none'; // Ocultar reproductor mientras se procesa
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Error del servidor: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.audio_url) {
+                    audioSource.src = data.audio_url;
+                    audioPlayer.load(); // Cargar el nuevo audio
+                    audioPlayer.style.display = 'block'; // Mostrar el reproductor
+                    messageDiv.textContent = '¡Archivo procesado! Puedes reproducir el audio.';
+                    messageDiv.setAttribute('aria-live', 'polite');
+                    audioPlayer.focus(); // Poner foco en el reproductor para accesibilidad
+                } else if (data.error) {
+                    messageDiv.textContent = `Error: ${data.error}`;
+                    messageDiv.setAttribute('aria-live', 'assertive');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                messageDiv.textContent = `Error al procesar el archivo: ${error.message}`;
+                messageDiv.setAttribute('aria-live', 'assertive');
+            }
+        }
+    </script>
+</head>
+<body>
+    <header>
+        <h1>SinSay</h1>
+        <p>Convierte tus documentos de texto a audio fácilmente.</p>
+    </header>
+
+    <main>
+        <section id="upload-section" aria-labelledby="upload-heading">
+            <h2 id="upload-heading">Sube tu archivo</h2>
+            <form id="uploadForm" aria-describedby="file-constraints">
+                <div>
+                    <label for="fileInput">Selecciona un archivo (.docx, .pdf, .txt):</label>
+                    <input type="file" id="fileInput" name="file" accept=".docx,.pdf,.txt" aria-required="true">
+                </div>
+                <button type="button" onclick="uploadFile()">Convertir a Audio</button>
+            </form>
+            <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt.</p>
+            <div id="message" role="status" aria-live="polite"></div>
+        </section>
+
+        <section id="player-section" aria-labelledby="player-heading">
+            <h2 id="player-heading">Reproductor de Audio</h2>
+            <audio id="audioPlayer" controls style="display: none;">
+                <source id="audioSource" src="" type="audio/mpeg">
+                Tu navegador no soporta el elemento de audio.
+            </audio>
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2023 SinSay. Todos los derechos reservados.</p>
+    </footer>
+
+    <style>
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
+</body>
+</html>
