@@ -68,12 +68,12 @@
             <h2 id="upload-heading">Sube tu archivo</h2>
             <form id="uploadForm" aria-describedby="file-constraints">
                 <div>
-                    <label for="fileInput">Selecciona un archivo (.docx, .pdf, .txt):</label>
-                    <input type="file" id="fileInput" name="file" accept=".docx,.pdf,.txt" aria-required="true">
+                    <label for="fileInput">Selecciona un archivo (.docx, .pdf, .txt, .brf, .bra, .brl):</label>
+                    <input type="file" id="fileInput" name="file" accept=".docx,.pdf,.txt,.brf,.bra,.brl" aria-required="true">
                 </div>
                 <button type="button" onclick="uploadFile()">Convertir a Audio</button>
             </form>
-            <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt.</p>
+            <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt, .brf, .bra, .brl.</p>
             <div id="message" role="status" aria-live="polite"></div>
         </section>
 

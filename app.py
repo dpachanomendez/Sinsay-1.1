@@ -10,12 +10,15 @@ import PyPDF2
 # Importación para TTS
 from gtts import gTTS
 
+# Importación para Braille
+import louis
+
 app = Flask(__name__)
 
 # Configuraciones
 UPLOAD_FOLDER = 'uploads'
 AUDIO_FOLDER = 'audio_files'
-ALLOWED_EXTENSIONS = {'txt', 'docx', 'pdf'}
+ALLOWED_EXTENSIONS = {'txt', 'docx', 'pdf', 'brf', 'bra', 'brl'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['AUDIO_FOLDER'] = AUDIO_FOLDER
@@ -28,11 +31,27 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def extract_text_from_braille(filepath):
+    """Extrae texto de un archivo Braille (.brf, .bra, .brl)."""
+    try:
+        with open(filepath, 'rb') as f:
+            braille_content = f.read()
+
+        # Traducir de Braille a texto Unicode
+        # Se asume una tabla de español, grado 1. Esto podría necesitar ser configurable.
+        text = louis.translateString(['es-g1.ctb'], braille_content)
+        return text
+    except Exception as e:
+        print(f"Error extrayendo texto de archivo Braille {filepath}: {e}")
+        raise ValueError("No se pudo procesar el archivo Braille.")
+
 def extract_text_from_file(filepath):
     text = ""
     extension = filepath.rsplit('.', 1)[1].lower()
     try:
-        if extension == 'txt':
+        if extension in ['brf', 'bra', 'brl']:
+            text = extract_text_from_braille(filepath)
+        elif extension == 'txt':
             with open(filepath, 'r', encoding='utf-8') as f:
                 text = f.read()
         elif extension == 'docx':
