@@ -1,26 +1,43 @@
 body {
-    font-family: sans-serif;
-    line-height: 1.6;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
+    background-color: #280640; /* Fondo púrpura oscuro en toda la página */
+    color: #fff;
+    min-height: 100vh;
 }
 
 header {
-    background: #333;
+    background: #280640;
     color: #fff;
-    padding: 1rem 0;
-    text-align: center;
+    padding: 0;
+    text-align: left;
+    margin: 0;
 }
 
 header h1 {
     margin: 0;
-    font-size: 2.5rem;
+    font-size: 0.5rem;
 }
 
 header p {
-    font-size: 1.1rem;
+    font-size: 0.1rem;
+}
+
+.logo-title {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem; /* Espacio mínimo entre logo y título */
+    margin-left: 0.2rem;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.logo {
+    width: 250px;
+    height: 250px;
+    object-fit: contain;
+    margin: 0;
 }
 
 main {
@@ -66,7 +83,7 @@ button {
     border: none;
     padding: 10px 15px;
     text-transform: uppercase;
-    border-radius: 4px;
+    border-radius: px;
     cursor: pointer;
     font-size: 1rem;
 }
@@ -105,9 +122,10 @@ audio {
 footer {
     text-align: center;
     padding: 20px;
-    background: #333;
+    background: #280640; /* Igual que el fondo */
     color: #fff;
     margin-top: 30px;
+    font-size: 1rem;
 }
 
 /* Estilo para contenido solo para lectores de pantalla, ya incluido en el HTML pero puede ser centralizado aquí */
@@ -131,4 +149,220 @@ select:focus,
 textarea:focus {
     outline: 2px solid #007bff;
     outline-offset: 2px;
+}
+
+.central-container {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem; /* Espacio mínimo entre paneles */
+    background: #f5f5fa;
+    border-radius: 24px;
+    box-shadow: 0 8px 32px rgba(46,0,79,0.12);
+    padding: 0.5rem; /* Espacio interno reducido */
+    width: 100%;
+    max-width: 950px;
+    margin-bottom: 0.5rem; /* Espacio mínimo abajo */
+}
+
+.left-panel, .right-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* Espacio mínimo entre elementos internos */
+}
+
+.player-section {
+    width: 100%;
+    max-width: 950px;
+    margin: 0 auto 0.5rem auto; /* Espacio mínimo abajo */
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.drop-area {
+    border: 5px dashed #b3b3b3;
+    border-radius: 16px;
+    background: #f5f5fa;
+    padding: 1.5rem 1.5rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s;
+}
+
+.drop-area:hover, .drop-area.dragover {
+    border-color: #6C1D9A;
+    background: #ececf6;
+}
+
+.drop-img {
+    width: 70px;
+    height: 70px;
+    margin-bottom: 0.5rem;
+}
+
+.drop-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #222;
+    margin: 0;
+}
+
+.file-input {
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    pointer-events: none; /* Evita que el input reciba clicks directamente */
+}
+
+.file-name {
+    margin-top: 0.5rem;
+    font-size: 1rem;
+    color: #6C1D9A;
+    font-weight: 600;
+    word-break: break-all;
+}
+
+.convert-btn {
+    display: block;
+    margin: 2rem auto 0 auto; /* 2rem de espacio arriba, centrado horizontalmente */
+    padding: 0.7rem 2rem;
+    background: #6C1D9A;
+    color: #fff;
+    border: none;
+    border-radius: 24px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.convert-btn:hover,
+.convert-btn:focus {
+    background: #280640;
+}
+
+/* Estilos para el modo oscuro */
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #121212;
+        color: #e0e0e0;
+    }
+
+    header {
+        background: #1e1e1e;
+    }
+
+    main {
+        background: #1e1e1e;
+        box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+    }
+
+    section {
+        border-bottom: 1px solid #333;
+    }
+
+    h2 {
+        color: #e0e0e0;
+    }
+
+    label {
+        color: #e0e0e0;
+    }
+
+    input[type="file"] {
+        background: #2c2c2c;
+        border: 1px solid #444;
+    }
+
+    button {
+        background: #007bff;
+        color: #fff;
+    }
+
+    button:hover,
+    button:focus {
+        background: #0056b3;
+    }
+
+    #message[aria-live="assertive"] {
+        background-color: #721c24;
+        color: #f8d7da;
+        border: 1px solid #f5c6cb;
+    }
+
+    #message[aria-live="polite"] {
+        background-color: #155724;
+        color: #d4edda;
+        border: 1px solid #c3e6cb;
+    }
+
+    footer {
+        background: #1e1e1e;
+    }
+
+    .central-container {
+        background: #2c2c2c;
+    }
+
+    .drop-area {
+        border-color: #6C1D9A;
+        background: #2c2c2c;
+    }
+
+    .drop-area:hover, .drop-area.dragover {
+        background: #3a3a3a;
+    }
+
+    .file-name {
+        color: #6C1D9A;
+    }
+
+    .convert-btn {
+        background: #6C1D9A;
+        color: #fff;
+    }
+
+    .convert-btn:hover {
+        background: #5a0e7e;
+    }
+}
+
+.column-upload {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2.5rem; /* Aumenta la separación entre los elementos de la columna de subida */
+}
+
+.audio-language-box {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.audio-label {
+    font-weight: 600;
+    color: #2E004F;
+}
+
+.audio-select {
+    padding: 0.4rem 1rem;
+    border-radius: 12px;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+    background: #ececf6;
+    color: #2E004F;
 }

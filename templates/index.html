@@ -55,35 +55,82 @@
                 messageDiv.setAttribute('aria-live', 'assertive');
             }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('fileInput');
+            const fileName = document.getElementById('fileName');
+
+            // Solo el área de drop abre el selector
+            dropArea.addEventListener('click', () => fileInput.click());
+
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.classList.add('dragover');
+            });
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.classList.remove('dragover');
+            });
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.classList.remove('dragover');
+                fileInput.files = e.dataTransfer.files;
+                if (fileInput.files.length > 0) {
+                    fileName.textContent = fileInput.files[0].name;
+                }
+            });
+
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    fileName.textContent = fileInput.files[0].name;
+                }
+            });
+        });
     </script>
 </head>
 <body>
-    <header>
-        <h1>SinSay</h1>
-        <p>Convierte tus documentos de texto a audio fácilmente.</p>
+    <header class="header">
+        <div class="logo-title">
+            <img src="{{ url_for('static', filename='bird.png') }}" alt="Logo SinSay" class="logo" />
+        </div>
     </header>
 
     <main>
         <section id="upload-section" aria-labelledby="upload-heading">
             <h2 id="upload-heading">Sube tu archivo</h2>
             <form id="uploadForm" aria-describedby="file-constraints">
-                <div>
-                    <label for="fileInput">Selecciona un archivo (.docx, .pdf, .txt):</label>
-                    <input type="file" id="fileInput" name="file" accept=".docx,.pdf,.txt" aria-required="true">
-                </div>
-                <button type="button" onclick="uploadFile()">Convertir a Audio</button>
-            </form>
+        <div class="drop-area" id="drop-area">
+            <img src="{{ url_for('static', filename='disk.png') }}" alt="Icono disco" class="drop-img" />
+            <p class="drop-text">Arrastra y suelta<br>el archivo</p>
+                    <input type="file" id="fileInput" name="file" class="file-input" accept=".docx,.pdf,.txt,.brf" aria-label="Selecciona un archivo" tabindex="-1" />
+            <p id="fileName" class="file-name"></p>
+        </div>
+        <button id="convertBtn" class="convert-btn" type="button" onclick="uploadFile()">CONVERTIR A AUDIO</button>
+        </form>
             <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt.</p>
             <div id="message" role="status" aria-live="polite"></div>
         </section>
 
         <section id="player-section" aria-labelledby="player-heading">
             <h2 id="player-heading">Reproductor de Audio</h2>
-            <audio id="audioPlayer" controls style="display: none;">
-                <source id="audioSource" src="" type="audio/mpeg">
-                Tu navegador no soporta el elemento de audio.
-            </audio>
-        </section>
+            <div class="column column-player">
+                <div class="audio-language-box">
+                    <label for="languageSelect" class="audio-label">Idioma:</label>
+                    <select id="languageSelect" name="language" class="audio-select">
+                        <option value="es-cl">Español (Chile)</option>
+                    </select>
+                </div>
+                <form id="settingsForm">
+                    <!-- ...resto de los controles... -->
+                </form>
+                <div class="player-section">
+                    <audio id="audioPlayer" controls style="display: none;">
+                            <source id="audioSource" src="" type="audio/mpeg">
+                            Tu navegador no soporta el elemento de audio.
+                        </audio>
+                </div>
+            </div>
+</section>
     </main>
 
     <footer>

@@ -15,7 +15,7 @@ app = Flask(__name__)
 # Configuraciones
 UPLOAD_FOLDER = 'uploads'
 AUDIO_FOLDER = 'audio_files'
-ALLOWED_EXTENSIONS = {'txt', 'docx', 'pdf'}
+ALLOWED_EXTENSIONS = {'txt', 'docx', 'pdf', 'brf'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['AUDIO_FOLDER'] = AUDIO_FOLDER
@@ -60,6 +60,19 @@ def extract_text_from_file(filepath):
         raise ValueError(f"No se pudo extraer texto del archivo {extension.upper()}. El archivo podría estar corrupto o en un formato inesperado.")
     return text
 
+def convert_brf_to_text(filepath):
+    """
+    Convierte un archivo Braille (.brf) a texto plano.
+    Esta función asume Braille ASCII, simplemente lee el contenido.
+    """
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            text = f.read()
+        return text
+    except Exception as e:
+        print(f"Error convirtiendo BRF a texto: {e}")
+        raise ValueError("No se pudo convertir el archivo BRF a texto plano.")
+
 def text_to_speech_gtts(text, lang='es'):
     if not text.strip():
         raise ValueError("El texto para convertir a audio está vacío.")
@@ -97,29 +110,28 @@ def upload_file_route():
         try:
             file.save(filepath)
 
-            # Extraer texto
-            extracted_text = extract_text_from_file(filepath)
-            if not extracted_text.strip():
-                # Limpiar archivo subido si no se pudo extraer texto útil
+            extension = filename.rsplit('.', 1)[1].lower()
+            if extension == 'brf':
+                texto = convert_brf_to_text(filepath)
+            else:
+                texto = extract_text_from_file(filepath)
+
+            if not texto.strip():
                 os.remove(filepath)
                 return jsonify({'error': 'No se pudo extraer contenido del archivo o está vacío.'}), 400
 
-            # Convertir a audio
-            audio_filename = text_to_speech_gtts(extracted_text)
+            audio_filename = text_to_speech_gtts(texto)
 
-            # Limpiar archivo subido original después de procesarlo
             os.remove(filepath)
 
             audio_url = url_for('serve_audio', filename=audio_filename, _external=True)
             return jsonify({'audio_url': audio_url, 'message': 'Archivo procesado correctamente.'})
 
-        except ValueError as ve: # Errores de extracción o TTS
-            # Si el archivo se guardó y hubo un error después, limpiarlo
+        except ValueError as ve:
             if os.path.exists(filepath):
                 os.remove(filepath)
             return jsonify({'error': str(ve)}), 400
         except Exception as e:
-            # Si el archivo se guardó y hubo un error después, limpiarlo
             if os.path.exists(filepath):
                 os.remove(filepath)
             print(f"Error en /upload: {e}")
