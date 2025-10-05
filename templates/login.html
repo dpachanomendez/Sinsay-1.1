@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SinSay - Autenticación</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Estilos específicos para login/register con glassmorphism */
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-lg);
+        }
+        
+        .auth-card {
+            max-width: 500px;
+            width: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            padding: var(--space-xl);
+            box-shadow: var(--shadow-xl);
+            animation: fadeIn var(--transition-slow);
+        }
+        
+        .auth-header {
+            text-align: center;
+            margin-bottom: var(--space-xl);
+        }
+        
+        .auth-title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            background: linear-gradient(135deg, #fff 0%, #e9d5ff 50%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--space-sm);
+        }
+        
+        .auth-subtitle {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+        }
+        
+        .tab-btns {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xl);
+            background: rgba(255, 255, 255, 0.1);
+            padding: var(--space-xs);
+            border-radius: var(--radius-md);
+        }
+        
+        .tab-btn {
+            flex: 1;
+            padding: var(--space-sm) var(--space-md);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all var(--transition-base);
+        }
+        
+        .tab-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--color-text-contrast);
+        }
+        
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+            color: var(--color-text-contrast);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn var(--transition-base);
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .form-group {
+            margin-bottom: var(--space-lg);
+        }
+        
+        .form-group label {
+            display: block;
+            color: var(--color-text-contrast);
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: var(--space-sm);
+            letter-spacing: 0.025em;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: var(--space-sm) var(--space-md);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-md);
+            color: var(--color-text-contrast);
+            font-size: 1rem;
+            transition: all var(--transition-base);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--color-accent);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2);
+        }
+        
+        .user-type-btns {
+            display: flex;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-lg);
+        }
+        
+        .user-type-btn {
+            flex: 1;
+            padding: var(--space-sm);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--color-text-contrast);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all var(--transition-base);
+        }
+        
+        .user-type-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--color-accent);
+            transform: translateY(-2px);
+        }
+        
+        .user-type-btn.selected {
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+            border-color: transparent;
+            color: var(--color-text-contrast);
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.4);
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: var(--space-md) var(--space-xl);
+            background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-primary) 100%);
+            color: var(--color-text-contrast);
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(168, 85, 247, 0.4);
+            transition: all var(--transition-base);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .submit-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.6);
+        }
+        
+        .submit-btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        
+        .error-msg {
+            background: rgba(248, 113, 113, 0.2);
+            color: #fecaca;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-lg);
+            text-align: center;
+            font-weight: 600;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            animation: fadeIn var(--transition-base);
+        }
+        
+        @media (max-width: 768px) {
+            .auth-title {
+                font-size: 2rem;
+            }
+            
+            .auth-card {
+                padding: var(--space-lg);
+            }
+            
+            .user-type-btns {
+                flex-direction: column;
+            }
+        }
+    </style>
+    <script>
+        function showTab(tab) {
+            document.getElementById('login-tab').classList.remove('active');
+            document.getElementById('register-tab').classList.remove('active');
+            document.getElementById('login-content').classList.remove('active');
+            document.getElementById('register-content').classList.remove('active');
+            document.getElementById(tab + '-tab').classList.add('active');
+            document.getElementById(tab + '-content').classList.add('active');
+        }
+        
+        function selectUserType(type) {
+            document.getElementById('user-type-tutor').classList.remove('selected');
+            document.getElementById('user-type-profesor').classList.remove('selected');
+            document.getElementById('tipo_usuario').value = type;
+            
+            if (type === 'profesor') {
+                document.getElementById('institucion-group').style.display = 'block';
+            } else {
+                document.getElementById('institucion-group').style.display = 'none';
+            }
+            
+            document.getElementById('user-type-' + type).classList.add('selected');
+        }
+        
+        window.onload = function() {
+            showTab('login');
+            selectUserType('tutor');
+        };
+    </script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1 class="auth-title">SinSay</h1>
+                <p class="auth-subtitle">Convierte texto a audio con IA</p>
+            </div>
+            
+            {% if error %}
+                <div class="error-msg">{{ error }}</div>
+            {% endif %}
+            
+            <div class="tab-btns">
+                <button id="login-tab" class="tab-btn active" onclick="showTab('login')">Iniciar sesión</button>
+                <button id="register-tab" class="tab-btn" onclick="showTab('register')">Registrarse</button>
+            </div>
+            
+            <!-- Login Section -->
+            <div id="login-content" class="tab-content active">
+                <form method="post" action="/login">
+                    <div class="form-group">
+                        <label for="correo_login">Correo electrónico</label>
+                        <input 
+                            type="email" 
+                            name="correo" 
+                            id="correo_login" 
+                            placeholder="tu@email.com"
+                            required
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="password_login">Contraseña</label>
+                        <input 
+                            type="password" 
+                            name="password" 
+                            id="password_login" 
+                            placeholder="••••••••"
+                            required
+                        >
+                    </div>
+                    <button type="submit" class="submit-btn">Entrar</button>
+                </form>
+            </div>
+            
+            <!-- Register Section -->
+            <div id="register-content" class="tab-content">
+                <form method="post" action="/register">
+                    <input type="hidden" name="tipo_usuario" id="tipo_usuario" value="tutor">
+                    
+                    <div class="user-type-btns">
+                        <button 
+                            type="button" 
+                            id="user-type-tutor" 
+                            class="user-type-btn selected" 
+                            onclick="selectUserType('tutor')"
+                        >
+                            Tutor particular
+                        </button>
+                        <button 
+                            type="button" 
+                            id="user-type-profesor" 
+                            class="user-type-btn" 
+                            onclick="selectUserType('profesor')"
+                        >
+                            Profesor universitario
+                        </button>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nombre">Nombre completo</label>
+                        <input 
+                            type="text" 
+                            name="nombre" 
+                            id="nombre" 
+                            placeholder="Juan Pérez"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="correo_reg">Correo electrónico</label>
+                        <input 
+                            type="email" 
+                            name="correo" 
+                            id="correo_reg" 
+                            placeholder="tu@email.com"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password_reg">Contraseña</label>
+                        <input 
+                            type="password" 
+                            name="password" 
+                            id="password_reg" 
+                            placeholder="••••••••"
+                            required
+                        >
+                    </div>
+                    
+                    <div class="form-group" id="institucion-group" style="display:none;">
+                        <label for="institucion">Institución académica</label>
+                        <select name="institucion" id="institucion">
+                            {% for inst in instituciones %}
+                                <option value="{{ inst }}">{{ inst }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="submit-btn">Crear cuenta</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

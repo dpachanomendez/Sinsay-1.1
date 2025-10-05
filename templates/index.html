@@ -8,6 +8,7 @@
     <script>
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
+            const voiceSelect = document.getElementById('voiceSelect');
             const messageDiv = document.getElementById('message');
             const audioPlayer = document.getElementById('audioPlayer');
             const audioSource = document.getElementById('audioSource');
@@ -20,6 +21,7 @@
 
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
+            formData.append('voice', voiceSelect.value);
 
             messageDiv.textContent = 'Procesando archivo...';
             messageDiv.setAttribute('aria-live', 'assertive');
@@ -60,6 +62,9 @@
             const dropArea = document.getElementById('drop-area');
             const fileInput = document.getElementById('fileInput');
             const fileName = document.getElementById('fileName');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const speedRange = document.getElementById('speedRange');
+            const volumeRange = document.getElementById('volumeRange');
 
             // Solo el área de drop abre el selector
             dropArea.addEventListener('click', () => fileInput.click());
@@ -85,70 +90,113 @@
                     fileName.textContent = fileInput.files[0].name;
                 }
             });
+
+            // Controles de reproducción
+            if (speedRange && audioPlayer) {
+                speedRange.addEventListener('input', () => {
+                    const val = parseFloat(speedRange.value);
+                    audioPlayer.playbackRate = isNaN(val) ? 1 : val;
+                });
+            }
+            if (volumeRange && audioPlayer) {
+                volumeRange.addEventListener('input', () => {
+                    const val = parseFloat(volumeRange.value);
+                    audioPlayer.volume = isNaN(val) ? 1 : val;
+                });
+            }
         });
     </script>
 </head>
 <body>
-    <header class="header">
-        <div class="logo-title">
-            <img src="{{ url_for('static', filename='bird.png') }}" alt="Logo SinSay" class="logo" />
+    <!-- Barra de navegación fija -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <span class="navbar-title">SinSay</span>
         </div>
-    </header>
-
-    <main>
-        <section id="upload-section" aria-labelledby="upload-heading">
-            <h2 id="upload-heading">Sube tu archivo</h2>
-            <form id="uploadForm" aria-describedby="file-constraints">
-        <div class="drop-area" id="drop-area">
-            <img src="{{ url_for('static', filename='disk.png') }}" alt="Icono disco" class="drop-img" />
-            <p class="drop-text">Arrastra y suelta<br>el archivo</p>
-                    <input type="file" id="fileInput" name="file" class="file-input" accept=".docx,.pdf,.txt,.brf" aria-label="Selecciona un archivo" tabindex="-1" />
-            <p id="fileName" class="file-name"></p>
+        <div class="navbar-right">
+            <a href="{{ url_for('logout') }}" class="navbar-logout-btn">Cerrar sesión</a>
         </div>
-        <button id="convertBtn" class="convert-btn" type="button" onclick="uploadFile()">CONVERTIR A AUDIO</button>
-        </form>
-            <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt.</p>
-            <div id="message" role="status" aria-live="polite"></div>
-        </section>
-
-        <section id="player-section" aria-labelledby="player-heading">
-            <h2 id="player-heading">Reproductor de Audio</h2>
-            <div class="column column-player">
-                <div class="audio-language-box">
-                    <label for="languageSelect" class="audio-label">Idioma:</label>
-                    <select id="languageSelect" name="language" class="audio-select">
-                        <option value="es-cl">Español (Chile)</option>
-                    </select>
-                </div>
-                <form id="settingsForm">
-                    <!-- ...resto de los controles... -->
-                </form>
-                <div class="player-section">
-                    <audio id="audioPlayer" controls style="display: none;">
-                            <source id="audioSource" src="" type="audio/mpeg">
-                            Tu navegador no soporta el elemento de audio.
-                        </audio>
-                </div>
+    </nav>
+    
+    <div class="app-layout">
+        <!-- Sidebar izquierda -->
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <a class="sidebar-item active" href="#">Inicio</a>
+                <a class="sidebar-item" href="#">Biblioteca</a>
+                <a class="sidebar-item" href="#">Recientes</a>
+                <a class="sidebar-item" href="#">Favoritos</a>
+                <a class="sidebar-item" href="#">Quiénes somos</a>
+                <a class="sidebar-item" href="#">Ayuda</a>
             </div>
-</section>
-    </main>
+        </aside>
 
-    <footer>
-        <p>&copy; 2023 SinSay. Todos los derechos reservados.</p>
-    </footer>
+        <!-- Contenido principal -->
+        <main class="content">
+            <div class="brand-hero" aria-hidden="true">
+                <h1 class="hero-title">SinSay</h1>
+            </div>
 
-    <style>
-        .sr-only {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            margin: -1px;
-            overflow: hidden;
-            clip: rect(0, 0, 0, 0);
-            white-space: nowrap;
-            border-width: 0;
-        }
-    </style>
+            <section class="central-container" aria-labelledby="upload-heading">
+                <div class="left-panel">
+                    <h2 id="upload-heading" class="sr-only">Sube tu archivo</h2>
+                    <form id="uploadForm" aria-describedby="file-constraints" onsubmit="event.preventDefault(); uploadFile();">
+                        <div class="drop-area" id="drop-area">
+                            <img src="{{ url_for('static', filename='disk.png') }}" alt="Icono disco" class="drop-img" />
+                            <p class="drop-text">Arrastra y suelta<br>el archivo</p>
+                            <input type="file" id="fileInput" name="file" class="file-input" accept=".docx,.pdf,.txt,.brf" aria-label="Selecciona un archivo" tabindex="-1" />
+                            <p id="fileName" class="file-name"></p>
+                        </div>
+                        <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt, .brf.</p>
+                    </form>
+                    <div class="sample-text-card" aria-hidden="true">Texto de ejemplo para la conversión de audio</div>
+                </div>
+
+                <div class="right-panel">
+                    <div class="settings-card">
+                        <div class="audio-language-box">
+                            <label for="languageSelect" class="audio-label">Idioma</label>
+                            <select id="languageSelect" name="language" class="audio-select">
+                                <option value="es-cl">Español (Chile)</option>
+                            </select>
+                        </div>
+                        <div class="voice-select-box">
+                            <label for="voiceSelect"><strong>Voz</strong></label>
+                            <select id="voiceSelect" name="voice">
+                                <option value="rpqlUOplj0Q0PIilat8h">Narrador hombre</option>
+                                <option value="ay4iqk10DLwc8KGSrf2t">Narradora mujer</option>
+                                <option value="7QQzpAyzlKTVrRzQJmTE">Alternativa</option>
+                                <option value="B10SmiMIwxTlneUpKPyE">Educativa/Historia</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="speedRange" class="audio-label">Velocidad de Reproducción</label>
+                            <input type="range" min="0.25" max="1.75" step="0.25" value="1" id="speedRange" aria-label="Velocidad de reproducción" />
+                            <div class="ticks"><span>0.25</span><span>0.5</span><span>0.75</span><span>Normal</span><span>1.25</span><span>1.5</span><span>1.75</span></div>
+                        </div>
+                        <div class="control-group">
+                            <label for="volumeRange" class="audio-label">Volumen</label>
+                            <input type="range" min="0" max="1" step="0.05" value="1" id="volumeRange" aria-label="Volumen" />
+                        </div>
+                        <button id="convertBtn" class="convert-btn" type="button" onclick="uploadFile()">Convertir a audio</button>
+                        <div id="message" role="status" aria-live="polite"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="player-section" aria-labelledby="player-heading">
+                <h2 id="player-heading" class="sr-only">Reproductor de Audio</h2>
+                <div class="wave-placeholder" aria-hidden="true"></div>
+                <audio id="audioPlayer" controls style="display: none;">
+                    <source id="audioSource" src="" type="audio/mpeg">
+                    Tu navegador no soporta el elemento de audio.
+                </audio>
+            </section>
+
+            <footer>
+                <p>&copy; 2025 SinSay. Todos los derechos reservados.</p>
+            </footer>
+        </main>
+    </div>
 </body>
 </html>
