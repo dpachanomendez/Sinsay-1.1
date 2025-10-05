@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biblioteca - SinSay</title>
+    <style>
+        :root {
+            --primary-purple: #7c3aed;
+            --dark-purple: #3c1f66;
+            --bg-dark: #1a0d2e;
+            --bg-card: rgba(124, 58, 237, 0.1);
+            --border-color: rgba(124, 58, 237, 0.3);
+            --text-light: #e0e0e0;
+            --space-xs: 0.5rem;
+            --space-sm: 0.75rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-full: 9999px;
+            --transition-base: 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a0d2e 0%, #3c1f66 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(26, 13, 46, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(45deg, #a78bfa, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .navbar-logout-btn {
+            background: var(--primary-purple);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: var(--radius-sm);
+            text-decoration: none;
+            transition: all var(--transition-base);
+            font-weight: 500;
+        }
+
+        .navbar-logout-btn:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+
+        /* Layout */
+        .app-layout {
+            display: flex;
+            margin-top: 60px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 220px;
+            background: rgba(26, 13, 46, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 2rem 0;
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-light);
+            text-decoration: none;
+            transition: all var(--transition-base);
+            border-left: 3px solid transparent;
+            font-weight: 500;
+        }
+
+        .sidebar-item:hover,
+        .sidebar-item.active {
+            background: var(--bg-card);
+            border-left-color: var(--primary-purple);
+            color: white;
+        }
+
+        /* Main Content */
+        .biblioteca-container {
+            flex: 1;
+            margin-left: 220px;
+            padding: var(--space-xl);
+            max-width: 1600px;
+            margin-right: auto;
+        }
+
+        /* Header con diseño más moderno */
+        .biblioteca-header {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(168, 85, 247, 0.15) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 3rem;
+            margin-bottom: var(--space-xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .biblioteca-icon {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            margin-right: 1rem;
+            vertical-align: middle;
+            filter: drop-shadow(0 4px 10px rgba(168, 85, 247, 0.5));
+        }
+
+        .biblioteca-icon svg {
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke: url(#iconGradient);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .biblioteca-header-title {
+            display: flex;
+            align-items: center;
+        }
+
+        .biblioteca-header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+
+        .biblioteca-header h1 {
+            font-size: 3rem;
+            margin-bottom: var(--space-md);
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 1;
+        }
+
+        .biblioteca-header p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1.1rem;
+            line-height: 1.7;
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Filtros con diseño mejorado */
+        .filters-section {
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.3) 0%, rgba(26, 13, 46, 0.5) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            margin-bottom: var(--space-xl);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-lg);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .filter-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #a78bfa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-xs);
+        }
+
+        .filter-select, 
+        .filter-input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(26, 13, 46, 0.6);
+            border: 2px solid rgba(124, 58, 237, 0.3);
+            border-radius: var(--radius-md);
+            color: #fff;
+            font-size: 1rem;
+            transition: all var(--transition-base);
+            outline: none;
+        }
+
+        .filter-select:hover, 
+        .filter-input:hover {
+            background: rgba(26, 13, 46, 0.8);
+            border-color: var(--primary-purple);
+        }
+
+        .filter-select:focus, 
+        .filter-input:focus {
+            background: rgba(26, 13, 46, 0.9);
+            border-color: #a78bfa;
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .filter-select option {
+            background: var(--dark-purple);
+            color: #fff;
+            padding: 0.5rem;
+        }
+
+        .filter-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* Grid de libros mejorado */
+        .books-section {
+            margin-top: var(--space-xl);
+        }
+
+        .books-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 2rem;
+        }
+
+        /* Tarjetas de libros con diseño premium */
+        .book-card {
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.4) 0%, rgba(26, 13, 46, 0.6) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .book-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(236, 72, 153, 0.1) 100%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .book-card::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, transparent 70%);
+            transform: scale(0);
+            transition: transform 0.6s ease;
+        }
+
+        .book-card:hover {
+            transform: translateY(-12px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(124, 58, 237, 0.4);
+            border-color: #a78bfa;
+        }
+
+        .book-card:hover::before {
+            opacity: 1;
+        }
+
+        .book-card:hover::after {
+            transform: scale(1);
+        }
+
+        /* Badge de categoría mejorado */
+        .book-category {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.8) 0%, rgba(168, 85, 247, 0.8) 100%);
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--space-md);
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+        }
+
+        .book-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #fff;
+            margin: var(--space-sm) 0;
+            line-height: 1.4;
+            position: relative;
+            z-index: 1;
+        }
+
+        .book-subtitle {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: var(--space-md);
+            line-height: 1.6;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Meta información con iconos mejorados */
+        .book-meta {
+            display: flex;
+            align-items: center;
+            gap: var(--space-lg);
+            margin-top: var(--space-lg);
+            padding-top: var(--space-lg);
+            border-top: 1px solid rgba(168, 85, 247, 0.2);
+            position: relative;
+            z-index: 1;
+        }
+
+        .book-level,
+        .book-duration {
+            display: flex;
+            align-items: center;
+            gap: var(--space-xs);
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.85);
+            font-weight: 500;
+        }
+
+        .level-badge {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .level-badge.facil {
+            background: #10b981;
+            box-shadow: 0 0 15px #10b981;
+        }
+
+        .level-badge.medio {
+            background: #f59e0b;
+            box-shadow: 0 0 15px #f59e0b;
+        }
+
+        .level-badge.alta {
+            background: #ef4444;
+            box-shadow: 0 0 15px #ef4444;
+        }
+
+        /* Botón de acción mejorado */
+        .book-action {
+            margin-top: var(--space-lg);
+            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, var(--primary-purple) 0%, #a78bfa 100%);
+            border: none;
+            border-radius: var(--radius-md);
+            color: #fff;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all var(--transition-base);
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+
+        .book-action::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .book-action:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5);
+        }
+
+        .book-action:hover::before {
+            width: 400px;
+            height: 400px;
+        }
+
+        .book-action span {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Estado vacío mejorado */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.3) 0%, rgba(26, 13, 46, 0.5) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .empty-state-icon {
+            font-size: 5rem;
+            margin-bottom: var(--space-lg);
+            opacity: 0.6;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .empty-state h3 {
+            font-size: 1.8rem;
+            margin-bottom: var(--space-md);
+            color: #a78bfa;
+        }
+
+        .empty-state p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1.1rem;
+            max-width: 500px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .biblioteca-container {
+                margin-left: 0;
+            }
+
+            .sidebar {
+                transform: translateX(-100%);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .biblioteca-container {
+                padding: var(--space-md);
+            }
+
+            .biblioteca-header {
+                padding: 2rem;
+            }
+
+            .biblioteca-header h1 {
+                font-size: 2rem;
+            }
+
+            .filters-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .books-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Barra de navegación fija -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <span class="navbar-title">SinSay</span>
+        </div>
+        <div class="navbar-right">
+            <a href="{{ url_for('logout') }}" class="navbar-logout-btn">Cerrar sesión</a>
+        </div>
+    </nav>
+
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <a class="sidebar-item" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item active" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+                <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
+                <a class="sidebar-item" href="#">Recientes</a>
+                <a class="sidebar-item" href="#">Favoritos</a>
+                <a class="sidebar-item" href="#">Quiénes somos</a>
+                <a class="sidebar-item" href="#">Ayuda</a>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <main class="biblioteca-container">
+        <!-- Header -->
+        <div class="biblioteca-header">
+            <div class="biblioteca-header-title">
+                <span class="biblioteca-icon">
+                    <svg viewBox="0 0 24 24">
+                        <defs>
+                            <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Estantería de libros -->
+                        <path d="M4 19h16M4 15h16M4 11h16M4 7h16" stroke-width="1.5"/>
+                        <!-- Libros -->
+                        <rect x="5" y="12" width="2" height="6" rx="0.5"/>
+                        <rect x="8" y="12" width="2" height="6" rx="0.5"/>
+                        <rect x="11" y="12" width="2.5" height="6" rx="0.5"/>
+                        <rect x="14.5" y="12" width="2" height="6" rx="0.5"/>
+                        <rect x="17.5" y="12" width="2" height="6" rx="0.5"/>
+                        <!-- Libros superiores -->
+                        <rect x="5.5" y="8" width="2" height="2.5" rx="0.5"/>
+                        <rect x="8.5" y="8" width="1.5" height="2.5" rx="0.5"/>
+                        <rect x="11" y="8" width="2.5" height="2.5" rx="0.5"/>
+                        <rect x="14.5" y="8" width="2" height="2.5" rx="0.5"/>
+                        <rect x="17.5" y="8" width="1.5" height="2.5" rx="0.5"/>
+                    </svg>
+                </span>
+                <h1>Biblioteca</h1>
+            </div>
+            <p>Descubre una amplia colección de libros, artículos científicos, noticias, cuentos e historia, organizados por categorías y niveles de complejidad. Todos nuestros contenidos están optimizados para ser completamente accesibles.</p>
+        </div>
+
+        <!-- Filtros -->
+        <section class="filters-section">
+            <div class="filters-grid">
+                <div class="filter-group">
+                    <label class="filter-label">Categoría</label>
+                    <select id="categoryFilter" class="filter-select">
+                        <option value="">Todas las categorías</option>
+                        <option value="historia">Historia</option>
+                        <option value="cuentos">Cuentos</option>
+                        <option value="novelas">Novelas</option>
+                        <option value="aprendizaje">Aprendizaje</option>
+                        <option value="biologia">Biología</option>
+                        <option value="ciencia">Ciencia</option>
+                        <option value="tecnologia">Tecnología</option>
+                        <option value="arte">Arte</option>
+                        <option value="noticias">Noticias</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Niveles</label>
+                    <select id="levelFilter" class="filter-select">
+                        <option value="">Todos los niveles</option>
+                        <option value="facil">Fácil</option>
+                        <option value="medio">Medio</option>
+                        <option value="alta">Alta</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Buscar</label>
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        class="filter-input" 
+                        placeholder="Buscar por título o tema..."
+                    >
+                </div>
+            </div>
+        </section>
+
+        <!-- Libros -->
+        <section class="books-section">
+            <div id="booksGrid" class="books-grid">
+                <!-- Los libros se cargarán dinámicamente aquí -->
+            </div>
+
+            <!-- Estado vacío -->
+            <div id="emptyState" class="empty-state" style="display: block;">
+                <div class="empty-state-icon">�</div>
+                <h3>La biblioteca está vacía</h3>
+                <p>Aún no hay libros disponibles. Los contenidos aparecerán aquí cuando se suban a la plataforma.</p>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // Datos de libros - Se cargarán desde MongoDB
+        let booksData = [];
+        let filteredBooks = [];
+
+        // Cargar libros desde la API
+        async function loadBooks() {
+            try {
+                const response = await fetch('/api/libros');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    booksData = data.libros || [];
+                    filteredBooks = [...booksData];
+                    renderBooks(filteredBooks);
+                    console.log(`📚 Cargados ${booksData.length} libros desde la base de datos`);
+                } else {
+                    console.error('Error al cargar libros:', data.error);
+                }
+            } catch (error) {
+                console.error('Error al conectar con la API:', error);
+            }
+        }
+
+        // Función para renderizar libros
+        function renderBooks(books) {
+            const booksGrid = document.getElementById('booksGrid');
+            const emptyState = document.getElementById('emptyState');
+
+            if (books.length === 0) {
+                booksGrid.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+
+            booksGrid.style.display = 'grid';
+            emptyState.style.display = 'none';
+
+            booksGrid.innerHTML = books.map(book => `
+                <div class="book-card" onclick="openBook(${book.id})">
+                    <span class="book-category">${book.categoryLabel}</span>
+                    <h3 class="book-title">${book.title}</h3>
+                    <p class="book-subtitle">${book.subtitle}</p>
+                    <div class="book-meta">
+                        <div class="book-level">
+                            <span class="level-badge ${book.level}"></span>
+                            <span>${book.levelLabel}</span>
+                        </div>
+                        <div class="book-duration">
+                            <span>⏱️</span>
+                            <span>${book.duration}</span>
+                        </div>
+                    </div>
+                    <button class="book-action" onclick="event.stopPropagation(); accessBook(${book.id})">
+                        <span style="position: relative; z-index: 1;">Acceder al Contenido</span>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Función para filtrar libros
+        function filterBooks() {
+            const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
+            const levelFilter = document.getElementById('levelFilter').value.toLowerCase();
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+
+            filteredBooks = booksData.filter(book => {
+                const matchesCategory = !categoryFilter || book.category === categoryFilter;
+                const matchesLevel = !levelFilter || book.level === levelFilter;
+                const matchesSearch = !searchQuery || 
+                    book.title.toLowerCase().includes(searchQuery) || 
+                    book.subtitle.toLowerCase().includes(searchQuery);
+
+                return matchesCategory && matchesLevel && matchesSearch;
+            });
+
+            renderBooks(filteredBooks);
+        }
+
+        // Event listeners para filtros
+        document.getElementById('categoryFilter').addEventListener('change', filterBooks);
+        document.getElementById('levelFilter').addEventListener('change', filterBooks);
+        document.getElementById('searchInput').addEventListener('input', filterBooks);
+
+        // Funciones para interacción con libros
+        function openBook(bookId) {
+            console.log('Abriendo libro:', bookId);
+            // Aquí se implementará la lógica para abrir el libro
+        }
+
+        function accessBook(bookId) {
+            const book = booksData.find(b => b.id === bookId);
+            if (book) {
+                alert(`Accediendo a: ${book.title}\n\nEsta funcionalidad se conectará con el sistema de lectura y TTS.`);
+            }
+        }
+
+        // Cargar libros al iniciar la página
+        loadBooks();
+    </script>
+    </main>
+    </div>
+</body>
+</html>

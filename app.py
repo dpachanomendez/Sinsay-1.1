@@ -7,6 +7,18 @@ import time
 from elevenlabs import generate, set_api_key
 import docx
 import PyPDF2
+from mutagen.mp3 import MP3  # Para obtener duración de archivos MP3
+
+# Google Cloud TTS como fallback
+try:
+    from google.cloud import texttospeech
+    GOOGLE_TTS_AVAILABLE = True
+    print("✅ Google Cloud TTS disponible como respaldo")
+    print(f"📦 Versión de google-cloud-texttospeech importada correctamente")
+except ImportError as e:
+    GOOGLE_TTS_AVAILABLE = False
+    print(f"⚠️  Google Cloud TTS no disponible: {e}")
+    print("⚠️  Ejecuta: pip install google-cloud-texttospeech")
 
 app = Flask(__name__)
 app.secret_key = "sinsay_secret_key"
@@ -33,17 +45,23 @@ try:
     print("✅ Conexión exitosa a MongoDB")
     db = client["sinsay"]
     usuarios_collection = db["usuarios"]
+    libros_collection = db["libros"]
     print(f"📊 Base de datos: {db.name}")
     print(f"📁 Colección: usuarios_collection")
+    print(f"📚 Colección: libros_collection")
 except Exception as e:
     print(f"❌ ERROR: No se pudo conectar a MongoDB: {e}")
     print("⚠️  Asegúrate de que MongoDB esté corriendo en localhost:27017")
     client = None
     db = None
     usuarios_collection = None
+    libros_collection = None
 
 # ElevenLabs API
 set_api_key("fd022cc95a0a8992c0a483aae4e1b62b6312666ea31db3d4afed617f43d8e034")
+
+# Google Cloud API Key (para Text-to-Speech)
+os.environ['GOOGLE_API_KEY'] = "AIzaSyBe1bC2-gepvvQdGza9i7O-X6WwEIYNfmo"
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -69,6 +87,66 @@ def extract_text_from_file(filepath):
         return text
     
     return ""
+
+def generate_audio_with_google_tts(text, language_code='es-ES', output_file=None):
+    """
+    Genera audio usando Google Cloud Text-to-Speech como respaldo
+    Usa API Key directamente sin necesidad de service account
+    """
+    if not GOOGLE_TTS_AVAILABLE:
+        raise Exception("Google Cloud TTS no está disponible - librería no instalada")
+    
+    print("🔄 Usando Google Cloud TTS como respaldo...")
+    
+    try:
+        # Inicializar cliente con API key desde variable de entorno
+        api_key = os.environ.get('GOOGLE_API_KEY')
+        if not api_key:
+            raise Exception("GOOGLE_API_KEY no está configurada en las variables de entorno")
+        
+        print(f"🔑 Usando API Key de Google Cloud (primeros 10 caracteres): {api_key[:10]}...")
+        
+        # Crear cliente con API key
+        from google.api_core import client_options as client_options_lib
+        client_opts = client_options_lib.ClientOptions(api_key=api_key)
+        client = texttospeech.TextToSpeechClient(client_options=client_opts)
+        
+        print("✅ Cliente de Google Cloud TTS inicializado correctamente")
+        
+    except Exception as auth_error:
+        print(f"⚠️  Error al inicializar cliente Google: {auth_error}")
+        print("⚠️  Intentando con configuración por defecto...")
+        try:
+            client = texttospeech.TextToSpeechClient()
+        except Exception as fallback_error:
+            raise Exception(f"No se pudo inicializar Google Cloud TTS: {fallback_error}")
+    
+    # Configurar la entrada de texto
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    
+    # Configurar la voz (español con voz neuronal)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code=language_code,
+        name="es-ES-Neural2-A",  # Voz femenina neuronal española
+        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE
+    )
+    
+    # Configurar el audio de salida
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=1.0,
+        pitch=0.0
+    )
+    
+    # Generar el audio
+    response = client.synthesize_speech(
+        input=synthesis_input,
+        voice=voice,
+        audio_config=audio_config
+    )
+    
+    print("✅ Audio generado con Google Cloud TTS")
+    return response.audio_content
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -219,7 +297,13 @@ def register():
         return render_template('login.html', error=f"Error al registrar: {str(e)}", instituciones=instituciones)
 
 @app.route('/')
+def bienvenida():
+    """Página de bienvenida - accesible sin login"""
+    return render_template('Bienvenida.html')
+
+@app.route('/index')
 def index():
+    """Página principal del convertidor TTS - requiere login"""
     if 'usuario_id' not in session:
         return redirect(url_for('login'))
     return render_template('index.html')
@@ -256,8 +340,153 @@ def test_db():
 
 @app.route('/logout')
 def logout():
+    """Cerrar sesión y redirigir a página de bienvenida"""
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for('bienvenida'))
+
+@app.route('/biblioteca')
+def biblioteca():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('biblioteca.html')
+
+@app.route('/subir_libro', methods=['GET', 'POST'])
+def subir_libro():
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+    
+    if request.method == 'GET':
+        return render_template('subir_libro.html')
+    
+    # POST - Procesar el formulario
+    try:
+        print("\n📚 SUBIR LIBRO - Guardando nuevo libro en la biblioteca")
+        
+        # Verificar que hay un archivo de audio
+        if 'audioFile' not in request.files:
+            return jsonify({'error': 'No se proporcionó el archivo de audio'}), 400
+        
+        audio_file = request.files['audioFile']
+        if audio_file.filename == '':
+            return jsonify({'error': 'No se seleccionó ningún archivo de audio'}), 400
+        
+        # Validar que sea MP3
+        if not audio_file.filename.lower().endswith('.mp3'):
+            return jsonify({'error': 'El archivo de audio debe ser formato MP3'}), 400
+        
+        # Obtener datos del formulario
+        title = request.form.get('title', '').strip()
+        subtitle = request.form.get('subtitle', '').strip()
+        category = request.form.get('category', '').strip()
+        level = request.form.get('level', '').strip()
+        
+        # Validar campos requeridos
+        if not all([title, subtitle, category, level]):
+            return jsonify({'error': 'Todos los campos son requeridos'}), 400
+        
+        timestamp = int(time.time())
+        
+        # Guardar archivo de audio
+        audio_filename = secure_filename(audio_file.filename)
+        unique_audio_filename = f"{timestamp}_audio_{audio_filename}"
+        audio_filepath = os.path.join(app.config['AUDIO_FOLDER'], unique_audio_filename)
+        audio_file.save(audio_filepath)
+        
+        print(f"🎵 Archivo de audio guardado: {unique_audio_filename}")
+        
+        # Calcular duración del audio
+        try:
+            audio = MP3(audio_filepath)
+            duration_seconds = int(audio.info.length)
+            
+            # Formatear duración
+            if duration_seconds < 60:
+                duration = f"{duration_seconds} seg"
+            elif duration_seconds < 3600:
+                minutes = duration_seconds // 60
+                seconds = duration_seconds % 60
+                duration = f"{minutes} min {seconds} seg" if seconds > 0 else f"{minutes} min"
+            else:
+                hours = duration_seconds // 3600
+                minutes = (duration_seconds % 3600) // 60
+                duration = f"{hours}h {minutes}min" if minutes > 0 else f"{hours}h"
+            
+            print(f"⏱️  Duración del audio: {duration}")
+        except Exception as e:
+            print(f"⚠️  No se pudo calcular la duración del audio: {e}")
+            duration = "Duración no disponible"
+        
+        # Mapeo de categorías a etiquetas visuales
+        category_labels = {
+            'historia': 'Historia',
+            'cuentos': 'Cuentos',
+            'novelas': 'Novelas',
+            'aprendizaje': 'Aprendizaje',
+            'biologia': 'Biología',
+            'ciencia': 'Ciencia',
+            'tecnologia': 'Tecnología',
+            'arte': 'Arte',
+            'noticias': 'Noticias'
+        }
+        
+        level_labels = {
+            'facil': 'Fácil',
+            'medio': 'Medio',
+            'alta': 'Alta'
+        }
+        
+        # Crear documento para MongoDB
+        libro_data = {
+            'title': title,
+            'subtitle': subtitle,
+            'category': category,
+            'categoryLabel': category_labels.get(category, category.title()),
+            'level': level,
+            'levelLabel': level_labels.get(level, level.title()),
+            'duration': duration,
+            'duration_seconds': duration_seconds,
+            'audio_filename': unique_audio_filename,
+            'audio_url': f'/audio_files/{unique_audio_filename}',
+            'uploaded_by': session['usuario_id'],
+            'uploaded_at': timestamp,
+            'created_at': time.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Guardar en MongoDB
+        if libros_collection is not None:
+            result = libros_collection.insert_one(libro_data)
+            print(f"📚 Libro guardado en MongoDB con ID: {result.inserted_id}")
+            
+            return jsonify({
+                'message': f'Libro "{title}" guardado exitosamente en la biblioteca',
+                'libro_id': str(result.inserted_id)
+            }), 200
+        else:
+            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+            
+    except Exception as e:
+        print(f"❌ ERROR al guardar libro: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Error al guardar el libro: {str(e)}'}), 500
+
+@app.route('/api/libros', methods=['GET'])
+def obtener_libros():
+    """API para obtener todos los libros de la biblioteca"""
+    try:
+        if libros_collection is None:
+            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+        
+        libros = list(libros_collection.find({}, {'_id': 0}))
+        
+        # Agregar ID numérico para cada libro
+        for idx, libro in enumerate(libros, start=1):
+            libro['id'] = idx
+        
+        return jsonify({'libros': libros}), 200
+    except Exception as e:
+        print(f"❌ ERROR al obtener libros: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -301,27 +530,60 @@ def upload():
         voice_id = request.form.get('voice', 'rpqlUOplj0Q0PIilat8h')
         print(f"🎤 Voz seleccionada: {voice_id}")
         
-        # Limitar texto si es muy largo (ElevenLabs tiene límites)
+        # Limitar texto si es muy largo
         MAX_CHARS = 5000
         if len(text) > MAX_CHARS:
             print(f"⚠️  Texto muy largo ({len(text)} chars), limitando a {MAX_CHARS}")
             text = text[:MAX_CHARS] + "..."
         
-        # Generar audio con ElevenLabs
-        print("🎙️  Generando audio con ElevenLabs...")
-        print(f"🔑 API Key configurada: {'Sí' if 'ELEVEN_API_KEY' in os.environ or True else 'No'}")
+        # Intentar generar audio con ElevenLabs primero
+        audio = None
+        tts_engine_used = None
         
+        print("🎙️  Intentando generar audio con ElevenLabs...")
         try:
             audio = generate(
                 text=text,
                 voice=voice_id,
                 model="eleven_multilingual_v2"
             )
-            print("✅ Audio generado exitosamente")
+            tts_engine_used = "ElevenLabs"
+            print("✅ Audio generado exitosamente con ElevenLabs")
+            
         except Exception as eleven_error:
-            print(f"❌ Error de ElevenLabs: {eleven_error}")
+            print(f"⚠️  ElevenLabs falló: {eleven_error}")
+            print(f"⚠️  Tipo de error: {type(eleven_error).__name__}")
+            print(f"🔍 Verificando disponibilidad de Google TTS: GOOGLE_TTS_AVAILABLE = {GOOGLE_TTS_AVAILABLE}")
+            
+            # Intentar con Google Cloud TTS como respaldo
+            if GOOGLE_TTS_AVAILABLE:
+                print("🔄 Cambiando a Google Cloud TTS...")
+                try:
+                    audio = generate_audio_with_google_tts(text, language_code='es-ES')
+                    tts_engine_used = "Google Cloud TTS"
+                    print("✅ Audio generado exitosamente con Google Cloud TTS")
+                except Exception as google_error:
+                    print(f"❌ Google Cloud TTS también falló: {google_error}")
+                    import traceback
+                    traceback.print_exc()
+                    os.remove(filepath)
+                    return jsonify({
+                        'error': f'Todos los motores TTS fallaron. ElevenLabs: {str(eleven_error)}, Google: {str(google_error)}'
+                    }), 500
+            else:
+                # No hay respaldo disponible
+                print("❌ No hay motor TTS de respaldo disponible")
+                print("⚠️  Asegúrate de que google-cloud-texttospeech esté instalado")
+                os.remove(filepath)
+                return jsonify({
+                    'error': f'Error al generar audio con ElevenLabs: {str(eleven_error)}. Instala Google Cloud TTS como respaldo: pip install google-cloud-texttospeech'
+                }), 500
+        
+        # Verificar que se generó audio
+        if audio is None:
+            print("❌ No se pudo generar audio")
             os.remove(filepath)
-            return jsonify({'error': f'Error al generar audio: {str(eleven_error)}'}), 500
+            return jsonify({'error': 'No se pudo generar audio con ningún motor TTS'}), 500
         
         # Guardar audio
         audio_filename = f"audio_{int(time.time())}.mp3"
@@ -333,6 +595,7 @@ def upload():
         
         file_size = os.path.getsize(audio_path)
         print(f"✅ Audio guardado: {audio_filename} ({file_size} bytes)")
+        print(f"🎙️  Motor TTS utilizado: {tts_engine_used}")
         
         # Limpiar archivo subido
         os.remove(filepath)
@@ -344,7 +607,8 @@ def upload():
         return jsonify({
             'success': True,
             'audio_url': audio_url,
-            'message': 'Conversión exitosa',
+            'message': f'Conversión exitosa con {tts_engine_used}',
+            'tts_engine': tts_engine_used,
             'audio_size': file_size,
             'text_length': len(text)
         })

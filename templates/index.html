@@ -4,7 +4,460 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SinSay - Convertidor de Texto a Voz</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        :root {
+            --primary-purple: #7c3aed;
+            --dark-purple: #3c1f66;
+            --bg-dark: #1a0d2e;
+            --bg-card: rgba(124, 58, 237, 0.1);
+            --border-color: rgba(124, 58, 237, 0.3);
+            --text-light: #e0e0e0;
+            --space-md: 1rem;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a0d2e 0%, #3c1f66 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(26, 13, 46, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+        }
+
+        .navbar-logout-btn {
+            background: var(--primary-purple);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+
+        .navbar-logout-btn:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+        }
+
+        /* Layout */
+        .app-layout {
+            display: flex;
+            margin-top: 60px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 200px;
+            background: rgba(26, 13, 46, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 2rem 0;
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-light);
+            text-decoration: none;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-item:hover,
+        .sidebar-item.active {
+            background: var(--bg-card);
+            border-left-color: var(--primary-purple);
+            color: white;
+        }
+
+        /* Main Content */
+        .content {
+            margin-left: 200px;
+            flex: 1;
+            padding: 2rem;
+        }
+
+        .hero-title {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(45deg, #a78bfa, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .central-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* NUEVO DISEÑO - Área de subida de archivos */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .drop-area {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
+            border: 2px dashed var(--border-color);
+            border-radius: 20px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .drop-area::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(124, 58, 237, 0.1) 0%, transparent 70%);
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .drop-area:hover {
+            border-color: var(--primary-purple);
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(168, 85, 247, 0.2) 100%);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.3);
+        }
+
+        .drop-area.dragover {
+            border-color: #a78bfa;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.35) 0%, rgba(168, 85, 247, 0.3) 100%);
+            transform: scale(1.02);
+        }
+
+        .drop-img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 1rem;
+            filter: drop-shadow(0 4px 10px rgba(124, 58, 237, 0.5));
+            position: relative;
+            z-index: 1;
+            color: #a78bfa;
+        }
+
+        .drop-text {
+            font-size: 1.2rem;
+            color: #e0e0e0;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-name {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: #a78bfa;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* NUEVO DISEÑO - Reproductor de audio */
+        .player-section-compact {
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.4) 0%, rgba(26, 13, 46, 0.6) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .wave-placeholder {
+            height: 60px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(124, 58, 237, 0.2) 25%,
+                rgba(168, 85, 247, 0.3) 50%,
+                rgba(124, 58, 237, 0.2) 75%,
+                transparent 100%
+            );
+            background-size: 200% 100%;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            animation: waveMove 3s linear infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .wave-placeholder::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent 0px,
+                rgba(255, 255, 255, 0.1) 2px,
+                transparent 4px,
+                transparent 20px
+            );
+        }
+
+        @keyframes waveMove {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 0%; }
+        }
+
+        .custom-audio-player {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .play-pause-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--primary-purple);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            flex-shrink: 0;
+        }
+
+        .play-pause-btn:hover {
+            background: #6d28d9;
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(124, 58, 237, 0.5);
+        }
+
+        .play-pause-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .progress-container {
+            flex: 1;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(124, 58, 237, 0.2);
+            border-radius: 3px;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-purple), #a78bfa);
+            border-radius: 3px;
+            transition: width 0.1s;
+            position: relative;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            color: #a78bfa;
+        }
+
+        /* Panel derecho */
+        .settings-card {
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.4) 0%, rgba(26, 13, 46, 0.6) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 2rem;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .audio-language-box,
+        .voice-select-box,
+        .control-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .audio-label,
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #e0e0e0;
+            font-weight: 500;
+        }
+
+        .audio-select,
+        select {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(26, 13, 46, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(124, 58, 237, 0.2);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary-purple);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+            box-shadow: 0 0 10px rgba(124, 58, 237, 0.8);
+        }
+
+        .ticks {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: #a78bfa;
+        }
+
+        .convert-btn,
+        .download-btn {
+            width: 100%;
+            padding: 1rem;
+            background: var(--primary-purple);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .convert-btn:hover,
+        .download-btn:hover:not(:disabled) {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(124, 58, 237, 0.5);
+        }
+
+        .download-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem;
+            color: #a78bfa;
+            font-size: 0.9rem;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+    </style>
     <script>
         async function uploadFile() {
             const fileInput = document.getElementById('fileInput');
@@ -41,12 +494,31 @@
                 const data = await response.json();
 
                 if (data.audio_url) {
+                    const playerContainer = document.getElementById('playerContainer');
+                    const playIcon = document.querySelector('.play-icon');
+                    const pauseIcon = document.querySelector('.pause-icon');
+                    const downloadBtn = document.getElementById('downloadBtn');
+                    
+                    // Mostrar el contenedor del reproductor
+                    playerContainer.style.display = 'block';
+                    
+                    // Guardar URL actual para descarga
+                    window.currentAudioUrl = data.audio_url;
+                    
                     audioSource.src = data.audio_url;
                     audioPlayer.load(); // Cargar el nuevo audio
-                    audioPlayer.style.display = 'block'; // Mostrar el reproductor
-                    messageDiv.textContent = '¡Archivo procesado! Puedes reproducir el audio.';
+                    
+                    // Resetear estado del reproductor
+                    playIcon.style.display = 'block';
+                    pauseIcon.style.display = 'none';
+                    
+                    // Habilitar botón de descarga
+                    downloadBtn.disabled = false;
+                    
+                    // Mostrar mensaje de éxito con el motor TTS usado
+                    const engineUsed = data.tts_engine || 'TTS';
+                    messageDiv.textContent = `✅ Audio generado con ${engineUsed}. ¡Puedes reproducirlo!`;
                     messageDiv.setAttribute('aria-live', 'polite');
-                    audioPlayer.focus(); // Poner foco en el reproductor para accesibilidad
                 } else if (data.error) {
                     messageDiv.textContent = `Error: ${data.error}`;
                     messageDiv.setAttribute('aria-live', 'assertive');
@@ -65,17 +537,32 @@
             const audioPlayer = document.getElementById('audioPlayer');
             const speedRange = document.getElementById('speedRange');
             const volumeRange = document.getElementById('volumeRange');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const playIcon = playPauseBtn.querySelector('.play-icon');
+            const pauseIcon = playPauseBtn.querySelector('.pause-icon');
+            const progressBar = document.getElementById('progressBar');
+            const progressFill = document.getElementById('progressFill');
+            const currentTimeDisplay = document.getElementById('currentTime');
+            const durationDisplay = document.getElementById('duration');
+            const downloadBtn = document.getElementById('downloadBtn');
 
-            // Solo el área de drop abre el selector
-            dropArea.addEventListener('click', () => fileInput.click());
+            // Solo el área de drop abre el selector (previniendo propagación del input)
+            dropArea.addEventListener('click', (e) => {
+                // Evitar que se dispare dos veces si se hace click directamente en el input
+                if (e.target !== fileInput) {
+                    fileInput.click();
+                }
+            });
 
             dropArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 dropArea.classList.add('dragover');
             });
+            
             dropArea.addEventListener('dragleave', () => {
                 dropArea.classList.remove('dragover');
             });
+            
             dropArea.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropArea.classList.remove('dragover');
@@ -104,6 +591,73 @@
                     audioPlayer.volume = isNaN(val) ? 1 : val;
                 });
             }
+
+            // Controles del reproductor personalizado
+            playPauseBtn.addEventListener('click', () => {
+                if (audioPlayer.paused) {
+                    audioPlayer.play();
+                    playIcon.style.display = 'none';
+                    pauseIcon.style.display = 'block';
+                } else {
+                    audioPlayer.pause();
+                    playIcon.style.display = 'block';
+                    pauseIcon.style.display = 'none';
+                }
+            });
+
+            // Actualizar barra de progreso
+            audioPlayer.addEventListener('timeupdate', () => {
+                const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+                progressFill.style.width = progress + '%';
+                progressBar.setAttribute('aria-valuenow', progress);
+                currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+            });
+
+            // Cargar duración
+            audioPlayer.addEventListener('loadedmetadata', () => {
+                durationDisplay.textContent = formatTime(audioPlayer.duration);
+            });
+
+            // Hacer clic en la barra de progreso
+            progressBar.addEventListener('click', (e) => {
+                const rect = progressBar.getBoundingClientRect();
+                const percent = (e.clientX - rect.left) / rect.width;
+                audioPlayer.currentTime = percent * audioPlayer.duration;
+            });
+
+            // Cuando termina el audio
+            audioPlayer.addEventListener('ended', () => {
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+            });
+
+            // Función de descarga
+            downloadBtn.addEventListener('click', () => {
+                if (window.currentAudioUrl) {
+                    const a = document.createElement('a');
+                    a.href = window.currentAudioUrl;
+                    a.download = 'audio_sinsay.mp3';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                }
+            });
+
+            // Formatear tiempo
+            function formatTime(seconds) {
+                if (isNaN(seconds)) return '0:00';
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            // Botón para guardar en biblioteca
+            const saveToLibraryBtn = document.getElementById('saveToLibraryBtn');
+            if (saveToLibraryBtn) {
+                saveToLibraryBtn.addEventListener('click', function() {
+                    window.location.href = '{{ url_for("subir_libro") }}';
+                });
+            }
         });
     </script>
 </head>
@@ -122,8 +676,9 @@
         <!-- Sidebar izquierda -->
         <aside class="sidebar">
             <div class="sidebar-menu">
-                <a class="sidebar-item active" href="#">Inicio</a>
-                <a class="sidebar-item" href="#">Biblioteca</a>
+                <a class="sidebar-item active" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+                <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
                 <a class="sidebar-item" href="#">Recientes</a>
                 <a class="sidebar-item" href="#">Favoritos</a>
                 <a class="sidebar-item" href="#">Quiénes somos</a>
@@ -142,14 +697,55 @@
                     <h2 id="upload-heading" class="sr-only">Sube tu archivo</h2>
                     <form id="uploadForm" aria-describedby="file-constraints" onsubmit="event.preventDefault(); uploadFile();">
                         <div class="drop-area" id="drop-area">
-                            <img src="{{ url_for('static', filename='disk.png') }}" alt="Icono disco" class="drop-img" />
-                            <p class="drop-text">Arrastra y suelta<br>el archivo</p>
+                            <svg class="drop-img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <p class="drop-text">Arrastra y suelta tu archivo<br>o haz clic para seleccionar</p>
                             <input type="file" id="fileInput" name="file" class="file-input" accept=".docx,.pdf,.txt,.brf" aria-label="Selecciona un archivo" tabindex="-1" />
                             <p id="fileName" class="file-name"></p>
                         </div>
                         <p id="file-constraints" class="sr-only">Formatos permitidos: .docx, .pdf, .txt, .brf.</p>
                     </form>
-                    <div class="sample-text-card" aria-hidden="true">Texto de ejemplo para la conversión de audio</div>
+                    
+                    <!-- Reproductor de audio integrado en el panel izquierdo -->
+                    <div class="player-section-compact" aria-labelledby="player-heading" style="display: none;" id="playerContainer">
+                        <h2 id="player-heading" class="sr-only">Reproductor de Audio</h2>
+                        <div class="wave-placeholder" aria-hidden="true"></div>
+                        
+                        <!-- Reproductor personalizado -->
+                        <div class="custom-audio-player">
+                            <button class="play-pause-btn" id="playPauseBtn" aria-label="Reproducir/Pausar">
+                                <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                                <svg class="pause-icon" style="display: none;" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                                </svg>
+                            </button>
+                            
+                            <div class="progress-container">
+                                <div class="progress-bar" id="progressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+                                    <div class="progress-fill" id="progressFill"></div>
+                                </div>
+                                <div class="time-display">
+                                    <span id="currentTime">0:00</span>
+                                    <span id="duration">0:00</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <audio id="audioPlayer" style="display: none;">
+                            <source id="audioSource" src="" type="audio/mpeg">
+                            Tu navegador no soporta el elemento de audio.
+                        </audio>
+                        
+                        <!-- Botón para guardar en biblioteca -->
+                        <button id="saveToLibraryBtn" class="convert-btn" style="margin-top: var(--space-md);">
+                            <span>📚 Guardar en Biblioteca</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="right-panel">
@@ -178,19 +774,19 @@
                             <label for="volumeRange" class="audio-label">Volumen</label>
                             <input type="range" min="0" max="1" step="0.05" value="1" id="volumeRange" aria-label="Volumen" />
                         </div>
+                        <div class="control-group">
+                            <label class="audio-label">Descargar Audio</label>
+                            <button class="download-btn" id="downloadBtn" disabled aria-label="Descargar audio generado">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                                </svg>
+                                Descargar MP3
+                            </button>
+                        </div>
                         <button id="convertBtn" class="convert-btn" type="button" onclick="uploadFile()">Convertir a audio</button>
                         <div id="message" role="status" aria-live="polite"></div>
                     </div>
                 </div>
-            </section>
-
-            <section class="player-section" aria-labelledby="player-heading">
-                <h2 id="player-heading" class="sr-only">Reproductor de Audio</h2>
-                <div class="wave-placeholder" aria-hidden="true"></div>
-                <audio id="audioPlayer" controls style="display: none;">
-                    <source id="audioSource" src="" type="audio/mpeg">
-                    Tu navegador no soporta el elemento de audio.
-                </audio>
             </section>
 
             <footer>

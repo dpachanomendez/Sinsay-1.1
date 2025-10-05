@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardar Libro - SinSay</title>
+    <style>
+        :root {
+            --primary-purple: #7c3aed;
+            --dark-purple: #3c1f66;
+            --bg-dark: #1a0d2e;
+            --border-color: rgba(124, 58, 237, 0.3);
+            --text-light: #e0e0e0;
+            --space-xs: 0.5rem;
+            --space-sm: 0.75rem;
+            --space-md: 1rem;
+            --space-lg: 1.5rem;
+            --space-xl: 2rem;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-full: 9999px;
+            --transition-base: 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a0d2e 0%, #3c1f66 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: rgba(26, 13, 46, 0.95);
+            backdrop-filter: blur(20px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .navbar-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #a78bfa, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .navbar-logout-btn {
+            background: var(--primary-purple);
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all var(--transition-base);
+            font-weight: 500;
+        }
+
+        .navbar-logout-btn:hover {
+            background: #6d28d9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.4);
+        }
+
+        /* Layout */
+        .app-layout {
+            display: flex;
+            margin-top: 60px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 220px;
+            background: rgba(26, 13, 46, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 2rem 0;
+            border-right: 1px solid var(--border-color);
+            position: fixed;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: block;
+            padding: 0.75rem 1.5rem;
+            color: var(--text-light);
+            text-decoration: none;
+            transition: all var(--transition-base);
+            border-left: 3px solid transparent;
+            font-weight: 500;
+        }
+
+        .sidebar-item:hover,
+        .sidebar-item.active {
+            background: rgba(124, 58, 237, 0.1);
+            border-left-color: var(--primary-purple);
+            color: white;
+        }
+
+        /* Main Content */
+        .upload-book-container {
+            flex: 1;
+            margin-left: 220px;
+            padding: var(--space-xl);
+            max-width: 1000px;
+            margin-right: auto;
+        }
+
+        /* Header con animación */
+        .upload-header {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(168, 85, 247, 0.15) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 3rem;
+            margin-bottom: var(--space-xl);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .upload-header::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            right: -5%;
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.3) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: float 5s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) scale(1); }
+            50% { transform: translateY(-15px) scale(1.05); }
+        }
+
+        .upload-header h1 {
+            font-size: 2.5rem;
+            margin-bottom: var(--space-md);
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            position: relative;
+            z-index: 1;
+        }
+
+        .upload-header p {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1.05rem;
+            line-height: 1.7;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Formulario mejorado */
+        .upload-form {
+            background: linear-gradient(135deg, rgba(60, 31, 102, 0.3) 0%, rgba(26, 13, 46, 0.5) 100%);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-xl);
+            padding: 2.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .form-group {
+            margin-bottom: var(--space-lg);
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: #a78bfa;
+            margin-bottom: var(--space-sm);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .form-label .required {
+            color: #ec4899;
+            margin-left: 4px;
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(26, 13, 46, 0.6);
+            border: 2px solid rgba(124, 58, 237, 0.3);
+            border-radius: var(--radius-md);
+            color: #fff;
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all var(--transition-base);
+            outline: none;
+        }
+
+        .form-input:hover,
+        .form-select:hover,
+        .form-textarea:hover {
+            background: rgba(26, 13, 46, 0.8);
+            border-color: var(--primary-purple);
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+            background: rgba(26, 13, 46, 0.9);
+            border-color: #a78bfa;
+            box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .form-input::placeholder,
+        .form-textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .form-select option {
+            background: var(--dark-purple);
+            color: #fff;
+            padding: 0.5rem;
+        }
+
+        .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        /* File input mejorado */
+        .file-input-wrapper {
+            position: relative;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            overflow: hidden;
+        }
+
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-sm);
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(168, 85, 247, 0.1) 100%);
+            border: 2px dashed rgba(124, 58, 237, 0.4);
+            border-radius: var(--radius-lg);
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            transition: all 0.4s ease;
+            text-align: center;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-input-label::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .file-input-label:hover {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.25) 0%, rgba(168, 85, 247, 0.2) 100%);
+            border-color: var(--primary-purple);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.3);
+        }
+
+        .file-input-label:hover::before {
+            opacity: 1;
+        }
+
+        .file-input-label.has-file {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.3) 0%, rgba(168, 85, 247, 0.25) 100%);
+            border-color: #a78bfa;
+            border-style: solid;
+        }
+
+        .file-input-label span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .file-input-label span:first-child {
+            font-size: 2rem;
+        }
+
+        .file-name {
+            font-size: 0.9rem;
+            color: #a78bfa;
+            margin-top: var(--space-sm);
+            font-weight: 500;
+        }
+
+        /* Grid para campos */
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: var(--space-md);
+        }
+
+        /* Botones mejorados */
+        .form-actions {
+            display: flex;
+            gap: var(--space-md);
+            margin-top: var(--space-xl);
+        }
+
+        .btn-submit,
+        .btn-cancel {
+            flex: 1;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, var(--primary-purple) 0%, #a78bfa 100%);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-submit::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.25);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.5);
+        }
+
+        .btn-submit:hover::before {
+            width: 400px;
+            height: 400px;
+        }
+
+        .btn-cancel {
+            background: rgba(26, 13, 46, 0.6);
+            color: #fff;
+            border: 2px solid rgba(124, 58, 237, 0.3);
+        }
+
+        .btn-cancel:hover {
+            background: rgba(26, 13, 46, 0.8);
+            border-color: var(--primary-purple);
+            transform: translateY(-3px);
+        }
+
+        .btn-submit span,
+        .btn-cancel span {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Mensajes mejorados */
+        .message {
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-lg);
+            font-weight: 500;
+            text-align: center;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+            border: 2px solid rgba(16, 185, 129, 0.5);
+            color: #10b981;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .message.error {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(239, 68, 68, 0.1) 100%);
+            border: 2px solid rgba(239, 68, 68, 0.5);
+            color: #ef4444;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
+        }
+
+        /* Helper text */
+        .helper-text {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: var(--space-xs);
+            font-style: italic;
+            line-height: 1.5;
+        }
+
+        /* Icono SVG de biblioteca */
+        .upload-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        .upload-icon svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 2px 4px rgba(124, 58, 237, 0.3));
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .upload-book-container {
+                margin-left: 0;
+            }
+
+            .sidebar {
+                transform: translateX(-100%);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .upload-book-container {
+                padding: var(--space-md);
+            }
+
+            .upload-header {
+                padding: 2rem;
+            }
+
+            .upload-header h1 {
+                font-size: 2rem;
+            }
+
+            .upload-form {
+                padding: 1.5rem;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .form-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="navbar-left">
+            <span class="navbar-title">SinSay</span>
+        </div>
+        <div class="navbar-right">
+            <a href="{{ url_for('logout') }}" class="navbar-logout-btn">Cerrar sesión</a>
+        </div>
+    </nav>
+
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-menu">
+                <a class="sidebar-item" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+                <a class="sidebar-item active" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
+                <a class="sidebar-item" href="#">Recientes</a>
+                <a class="sidebar-item" href="#">Favoritos</a>
+                <a class="sidebar-item" href="#">Quiénes somos</a>
+                <a class="sidebar-item" href="#">Ayuda</a>
+            </div>
+        </aside>
+
+        <!-- Contenido principal -->
+        <main class="upload-book-container">
+            <!-- Header -->
+            <div class="upload-header">
+                <h1>
+                    <span class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="bookGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+                                    <stop offset="100%" style="stop-color:#ec4899;stop-opacity:1" />
+                                </linearGradient>
+                            </defs>
+                            <!-- Estante superior -->
+                            <line x1="2" y1="8" x2="22" y2="8" stroke="url(#bookGradient)" stroke-width="1.5" stroke-linecap="round"/>
+                            <!-- Libros estante superior -->
+                            <rect x="3" y="4" width="3" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="7" y="3.5" width="2.5" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="10.5" y="4" width="3" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="14.5" y="3.5" width="2.5" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="18" y="4" width="3" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <!-- Estante medio -->
+                            <line x1="2" y1="15" x2="22" y2="15" stroke="url(#bookGradient)" stroke-width="1.5" stroke-linecap="round"/>
+                            <!-- Libros estante medio -->
+                            <rect x="3" y="11" width="2.5" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="6.5" y="10.5" width="3" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="10.5" y="11" width="2.5" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="14" y="10.5" width="3" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="18" y="11" width="3" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <!-- Estante inferior -->
+                            <line x1="2" y1="22" x2="22" y2="22" stroke="url(#bookGradient)" stroke-width="1.5" stroke-linecap="round"/>
+                            <!-- Libros estante inferior -->
+                            <rect x="3" y="18" width="3" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="7" y="17.5" width="2.5" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="10.5" y="18" width="3.5" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="15" y="17.5" width="2.5" height="4.5" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                            <rect x="18.5" y="18" width="2.5" height="4" fill="none" stroke="url(#bookGradient)" stroke-width="1.5" rx="0.5"/>
+                        </svg>
+                    </span>
+                    Guardar Libro en Biblioteca
+                </h1>
+                <p>Sube un libro a la biblioteca de SinSay. Completa la información del libro para que esté disponible para todos los usuarios.</p>
+            </div>
+
+            <!-- Mensaje -->
+            <div id="message" class="message"></div>
+
+            <!-- Formulario -->
+            <form id="uploadBookForm" class="upload-form" enctype="multipart/form-data">
+                <!-- Título -->
+                <div class="form-group">
+                    <label class="form-label" for="title">
+                        Título del libro<span class="required">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="title" 
+                        name="title" 
+                        class="form-input" 
+                        placeholder="Ej: El Quijote de la Mancha"
+                        required
+                    >
+                </div>
+
+                <!-- Descripción -->
+                <div class="form-group">
+                    <label class="form-label" for="subtitle">
+                        Descripción<span class="required">*</span>
+                    </label>
+                    <textarea 
+                        id="subtitle" 
+                        name="subtitle" 
+                        class="form-textarea" 
+                        placeholder="Breve descripción del contenido del libro..."
+                        required
+                    ></textarea>
+                    <div class="helper-text">Escribe una breve descripción que ayude a los usuarios a entender de qué trata el libro.</div>
+                </div>
+
+                <!-- Categoría y Nivel -->
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="category">
+                            Categoría<span class="required">*</span>
+                        </label>
+                        <select id="category" name="category" class="form-select" required>
+                            <option value="">Selecciona una categoría</option>
+                            <option value="historia">Historia</option>
+                            <option value="cuentos">Cuentos</option>
+                            <option value="novelas">Novelas</option>
+                            <option value="aprendizaje">Aprendizaje</option>
+                            <option value="biologia">Biología</option>
+                            <option value="ciencia">Ciencia</option>
+                            <option value="tecnologia">Tecnología</option>
+                            <option value="arte">Arte</option>
+                            <option value="noticias">Noticias</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="level">
+                            Nivel de dificultad<span class="required">*</span>
+                        </label>
+                        <select id="level" name="level" class="form-select" required>
+                            <option value="">Selecciona un nivel</option>
+                            <option value="facil">Fácil</option>
+                            <option value="medio">Medio</option>
+                            <option value="alta">Alta</option>
+                        </select>
+                    </div>
+                </div>
+
+
+
+                <!-- Archivo de Audio -->
+                <div class="form-group">
+                    <label class="form-label" for="audioFile">
+                        Archivo de audio (MP3)<span class="required">*</span>
+                    </label>
+                    <div class="file-input-wrapper">
+                        <input 
+                            type="file" 
+                            id="audioFile" 
+                            name="audioFile" 
+                            accept=".mp3,audio/mpeg"
+                            required
+                        >
+                        <label for="audioFile" id="audioFileLabel" class="file-input-label">
+                            <span>🎵</span>
+                            <span>Haz clic para seleccionar el audio</span>
+                        </label>
+                    </div>
+                    <div id="audioFileName" class="file-name"></div>
+                    <div id="audioDuration" class="file-name" style="color: var(--color-primary-light);"></div>
+                    <div class="helper-text">Sube el archivo de audio MP3 que generaste y descargaste previamente desde el convertidor. La duración se calculará automáticamente.</div>
+                </div>
+
+                <!-- Botones -->
+                <div class="form-actions">
+                    <button type="button" id="btnCancel" class="btn-cancel">
+                        <span>Cancelar</span>
+                    </button>
+                    <button type="submit" class="btn-submit">
+                        <span>💾 Guardar Libro</span>
+                    </button>
+                </div>
+            </form>
+        </main>
+    </div>
+
+    <script>
+        // Botón de cancelar
+        document.getElementById('btnCancel').addEventListener('click', function() {
+            window.location.href = '{{ url_for("biblioteca") }}';
+        });
+
+        // Manejo del input de archivo de audio
+        const audioFileInput = document.getElementById('audioFile');
+        const audioFileLabel = document.getElementById('audioFileLabel');
+        const audioFileNameDisplay = document.getElementById('audioFileName');
+        const audioDurationDisplay = document.getElementById('audioDuration');
+
+        audioFileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const fileName = file.name;
+                const fileSize = (file.size / (1024 * 1024)).toFixed(2); // Tamaño en MB
+                audioFileNameDisplay.textContent = `Audio seleccionado: ${fileName} (${fileSize} MB)`;
+                audioFileLabel.classList.add('has-file');
+                audioFileLabel.innerHTML = `<span>✅</span><span>Audio seleccionado</span>`;
+                
+                // Calcular duración del audio
+                const audio = new Audio();
+                const url = URL.createObjectURL(file);
+                audio.src = url;
+                
+                audio.addEventListener('loadedmetadata', function() {
+                    const duration = audio.duration;
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = Math.floor(duration % 60);
+                    
+                    let durationText = '';
+                    if (duration < 60) {
+                        durationText = `${Math.floor(duration)} segundos`;
+                    } else if (duration < 3600) {
+                        durationText = `${minutes} min ${seconds} seg`;
+                    } else {
+                        const hours = Math.floor(duration / 3600);
+                        const remainingMinutes = Math.floor((duration % 3600) / 60);
+                        durationText = `${hours}h ${remainingMinutes}min`;
+                    }
+                    
+                    audioDurationDisplay.textContent = `⏱️ Duración: ${durationText}`;
+                    URL.revokeObjectURL(url);
+                });
+            }
+        });
+
+        // Manejo del formulario
+        const form = document.getElementById('uploadBookForm');
+        const messageDiv = document.getElementById('message');
+
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+
+            // Mostrar mensaje de carga
+            messageDiv.className = 'message';
+            messageDiv.style.display = 'block';
+            messageDiv.textContent = '⏳ Guardando libro en la biblioteca...';
+
+            try {
+                const response = await fetch('/subir_libro', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    messageDiv.className = 'message success';
+                    messageDiv.textContent = `✅ ${data.message}`;
+                    
+                    // Resetear formulario
+                    form.reset();
+                    audioFileNameDisplay.textContent = '';
+                    audioDurationDisplay.textContent = '';
+                    audioFileLabel.classList.remove('has-file');
+                    audioFileLabel.innerHTML = `<span>🎵</span><span>Haz clic para seleccionar el audio</span>`;
+
+                    // Redirigir a biblioteca después de 2 segundos
+                    setTimeout(() => {
+                        window.location.href = '{{ url_for("biblioteca") }}';
+                    }, 2000);
+                } else {
+                    messageDiv.className = 'message error';
+                    messageDiv.textContent = `❌ Error: ${data.error}`;
+                }
+            } catch (error) {
+                messageDiv.className = 'message error';
+                messageDiv.textContent = `❌ Error al guardar el libro: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
