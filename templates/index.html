@@ -465,6 +465,14 @@
             const messageDiv = document.getElementById('message');
             const audioPlayer = document.getElementById('audioPlayer');
             const audioSource = document.getElementById('audioSource');
+            const saveToggle = document.getElementById('autoSaveToggle');
+            const titleInput = document.getElementById('libTitle');
+            const subtitleInput = document.getElementById('libSubtitle');
+            const categorySelect = document.getElementById('libCategory');
+            const levelSelect = document.getElementById('libLevel');
+            const saveAsChapter = document.getElementById('saveAsChapter');
+            const parentBook = document.getElementById('parentBook');
+            const chapterTitle = document.getElementById('chapterTitle');
 
             if (fileInput.files.length === 0) {
                 messageDiv.textContent = 'Por favor, selecciona un archivo.';
@@ -475,6 +483,29 @@
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
             formData.append('voice', voiceSelect.value);
+
+            // Guardado automático en biblioteca
+            if (saveToggle && saveToggle.checked) {
+                formData.append('saveToLibrary', 'true');
+                formData.append('title', (titleInput?.value || '').trim());
+                formData.append('subtitle', (subtitleInput?.value || '').trim());
+                formData.append('category', (categorySelect?.value || '').trim());
+                formData.append('level', (levelSelect?.value || '').trim());
+
+                // Guardar como capítulo de un libro existente
+                if (saveAsChapter && saveAsChapter.checked) {
+                    if (!parentBook || !parentBook.value) {
+                        messageDiv.textContent = 'Selecciona un libro padre para guardar como capítulo.';
+                        messageDiv.setAttribute('aria-live', 'assertive');
+                        return;
+                    }
+                    formData.append('saveAsChapter', 'true');
+                    formData.append('parentBookId', parentBook.value);
+                    if (chapterTitle && chapterTitle.value) {
+                        formData.append('chapterTitle', chapterTitle.value.trim());
+                    }
+                }
+            }
 
             messageDiv.textContent = 'Procesando archivo...';
             messageDiv.setAttribute('aria-live', 'assertive');
@@ -497,13 +528,10 @@
                     const playerContainer = document.getElementById('playerContainer');
                     const playIcon = document.querySelector('.play-icon');
                     const pauseIcon = document.querySelector('.pause-icon');
-                    const downloadBtn = document.getElementById('downloadBtn');
+                    
                     
                     // Mostrar el contenedor del reproductor
                     playerContainer.style.display = 'block';
-                    
-                    // Guardar URL actual para descarga
-                    window.currentAudioUrl = data.audio_url;
                     
                     audioSource.src = data.audio_url;
                     audioPlayer.load(); // Cargar el nuevo audio
@@ -512,12 +540,13 @@
                     playIcon.style.display = 'block';
                     pauseIcon.style.display = 'none';
                     
-                    // Habilitar botón de descarga
-                    downloadBtn.disabled = false;
-                    
                     // Mostrar mensaje de éxito con el motor TTS usado
                     const engineUsed = data.tts_engine || 'TTS';
-                    messageDiv.textContent = `✅ Audio generado con ${engineUsed}. ¡Puedes reproducirlo!`;
+                    if (data.saved_to_library && data.libro_id) {
+                        messageDiv.innerHTML = `✅ Audio generado con ${engineUsed} y guardado en la biblioteca. <a href="/reproductor/${data.libro_id}" style="color:#a78bfa;text-decoration:underline">Abrir reproductor</a>`;
+                    } else {
+                        messageDiv.textContent = `✅ Audio generado con ${engineUsed}. ¡Puedes reproducirlo!`;
+                    }
                     messageDiv.setAttribute('aria-live', 'polite');
                 } else if (data.error) {
                     messageDiv.textContent = `Error: ${data.error}`;
@@ -544,7 +573,7 @@
             const progressFill = document.getElementById('progressFill');
             const currentTimeDisplay = document.getElementById('currentTime');
             const durationDisplay = document.getElementById('duration');
-            const downloadBtn = document.getElementById('downloadBtn');
+            
 
             // Solo el área de drop abre el selector (previniendo propagación del input)
             dropArea.addEventListener('click', (e) => {
@@ -631,17 +660,7 @@
                 pauseIcon.style.display = 'none';
             });
 
-            // Función de descarga
-            downloadBtn.addEventListener('click', () => {
-                if (window.currentAudioUrl) {
-                    const a = document.createElement('a');
-                    a.href = window.currentAudioUrl;
-                    a.download = 'audio_sinsay.mp3';
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                }
-            });
+            // Sin botón de descarga: removido según nueva especificación
 
             // Formatear tiempo
             function formatTime(seconds) {
@@ -652,11 +671,37 @@
             }
 
             // Botón para guardar en biblioteca
-            const saveToLibraryBtn = document.getElementById('saveToLibraryBtn');
-            if (saveToLibraryBtn) {
-                saveToLibraryBtn.addEventListener('click', function() {
-                    window.location.href = '{{ url_for("subir_libro") }}';
-                });
+            // Toggle habilita/deshabilita campos (en panel derecho)
+            const saveToggle = document.getElementById('autoSaveToggle');
+            const metaFields = document.getElementById('autoSaveFields');
+            const saveAsChapter = document.getElementById('saveAsChapter');
+            const chapterFields = document.getElementById('chapterFields');
+            const parentBook = document.getElementById('parentBook');
+            if (saveToggle && metaFields) {
+                const updateState = () => {
+                    metaFields.style.display = saveToggle.checked ? 'block' : 'none';
+                };
+                saveToggle.addEventListener('change', updateState);
+                updateState();
+            }
+            async function loadParentBooks(){
+                try{
+                    const r = await fetch('/api/libros');
+                    const data = await r.json();
+                    const libros = data.libros || [];
+                    const roots = libros.filter(b => !b.parent_id);
+                    parentBook.innerHTML = '<option value="">Selecciona libro padre…</option>' + roots.map(b=>`<option value="${b._id}">${(b.title||'Sin título')}</option>`).join('');
+                }catch(e){ /* ignore */ }
+            }
+            if (saveAsChapter && chapterFields){
+                const togg = ()=>{
+                    const on = saveAsChapter.checked;
+                    chapterFields.style.display = on ? 'block' : 'none';
+                    if (on) loadParentBooks();
+                };
+                saveAsChapter.addEventListener('change', togg);
+                // Initialize visibility on load
+                togg();
             }
         });
     </script>
@@ -676,13 +721,13 @@
         <!-- Sidebar izquierda -->
         <aside class="sidebar">
             <div class="sidebar-menu">
-                <a class="sidebar-item active" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
                 <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
-                <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
+                <a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+                <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+                
                 <a class="sidebar-item" href="#">Recientes</a>
-                <a class="sidebar-item" href="#">Favoritos</a>
-                <a class="sidebar-item" href="#">Quiénes somos</a>
-                <a class="sidebar-item" href="#">Ayuda</a>
+                
             </div>
         </aside>
 
@@ -741,10 +786,6 @@
                             Tu navegador no soporta el elemento de audio.
                         </audio>
                         
-                        <!-- Botón para guardar en biblioteca -->
-                        <button id="saveToLibraryBtn" class="convert-btn" style="margin-top: var(--space-md);">
-                            <span>📚 Guardar en Biblioteca</span>
-                        </button>
                     </div>
                 </div>
 
@@ -759,10 +800,14 @@
                         <div class="voice-select-box">
                             <label for="voiceSelect"><strong>Voz</strong></label>
                             <select id="voiceSelect" name="voice">
-                                <option value="rpqlUOplj0Q0PIilat8h">Narrador hombre</option>
+                                <option value="rpqlUOplj0Q0PIilat8h" selected>Voz principal (ElevenLabs)</option>
+                                <option value="zRUArUmK0DWSP7K6mmLW">Narrador masculino zRUArUmK0DWSP7K6mmLW</option>
+                                <option value="ypIbR1aohyRSdDv25DPr">Voz mujer para cuentos infantiles</option>
                                 <option value="ay4iqk10DLwc8KGSrf2t">Narradora mujer</option>
+                                <option value="4vqDWmE9rvDX51nxtDbo">Narradora femenina para audiolibres</option>
+                                <option value="sTssBd4UwWFtfaTFfdfQ">Voz de relajación femenina</option>
                                 <option value="7QQzpAyzlKTVrRzQJmTE">Alternativa</option>
-                                <option value="B10SmiMIwxTlneUpKPyE">Educativa/Historia</option>
+                                <option value="9ex3ULzEJpgppkMxiT5I">Narrador educacional v22</option>
                             </select>
                         </div>
                         <div class="control-group">
@@ -774,14 +819,48 @@
                             <label for="volumeRange" class="audio-label">Volumen</label>
                             <input type="range" min="0" max="1" step="0.05" value="1" id="volumeRange" aria-label="Volumen" />
                         </div>
+                        <!-- Guardado automático en biblioteca (mover aquí) -->
                         <div class="control-group">
-                            <label class="audio-label">Descargar Audio</label>
-                            <button class="download-btn" id="downloadBtn" disabled aria-label="Descargar audio generado">
-                                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                                    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                                </svg>
-                                Descargar MP3
-                            </button>
+                            <label class="audio-label" for="autoSaveToggle">Guardar en Biblioteca</label>
+                            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+                                <input type="checkbox" id="autoSaveToggle" />
+                                <span>📚 Guardar automáticamente el audio generado</span>
+                            </label>
+                            <div id="autoSaveFields" style="display:none;margin-top:.75rem;">
+                                <div style="display:grid;gap:.75rem;">
+                                    <input id="libTitle" class="audio-select" placeholder="Título" />
+                                    <textarea id="libSubtitle" class="audio-select" placeholder="Descripción" style="min-height:80px;"></textarea>
+                                    <select id="libCategory" class="audio-select">
+                                        <option value="">Categoría</option>
+                                        <option value="historia">Historia</option>
+                                        <option value="cuentos">Cuentos</option>
+                                        <option value="novelas">Novelas</option>
+                                        <option value="aprendizaje">Aprendizaje</option>
+                                        <option value="biologia">Biología</option>
+                                        <option value="ciencia">Ciencia</option>
+                                        <option value="tecnologia">Tecnología</option>
+                                        <option value="arte">Arte</option>
+                                        <option value="noticias">Noticias</option>
+                                    </select>
+                                    <select id="libLevel" class="audio-select">
+                                        <option value="">Nivel</option>
+                                        <option value="facil">Fácil</option>
+                                        <option value="medio">Medio</option>
+                                        <option value="alta">Alta</option>
+                                    </select>
+                                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+                                        <input type="checkbox" id="saveAsChapter" />
+                                        <span>📖 ¿Guardar como nuevo capítulo de un libro guardado?</span>
+                                    </label>
+                                    <div id="chapterFields" style="display:none; border:1px dashed rgba(124,58,237,0.35); border-radius:10px; padding:.75rem;">
+                                        <select id="parentBook" class="audio-select">
+                                            <option value="">Selecciona libro padre…</option>
+                                        </select>
+                                        <input id="chapterTitle" class="audio-select" placeholder="Título del capítulo (opcional)" />
+                                        <small style="opacity:.8;">Los capítulos se numerarán automáticamente (I, II, III…).</small>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <button id="convertBtn" class="convert-btn" type="button" onclick="uploadFile()">Convertir a audio</button>
                         <div id="message" role="status" aria-live="polite"></div>

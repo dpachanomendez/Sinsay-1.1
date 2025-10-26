@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Descubrir - SinSay</title>
+  <style>
+    :root{
+      --primary-purple:#7c3aed;--dark-purple:#3c1f66;--bg-dark:#1a0d2e;--bg-card:rgba(124,58,237,.1);--border-color:rgba(124,58,237,.3);--text-light:#e0e0e0;--space-xs:.5rem;--space-sm:.75rem;--space-md:1rem;--space-lg:1.5rem;--space-xl:2rem;--radius-sm:8px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;--radius-full:9999px;--transition-base:.3s ease
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif;background:linear-gradient(135deg,#1a0d2e 0%,#3c1f66 100%);color:var(--text-light);min-height:100vh;overflow-x:hidden}
+    .navbar{background:rgba(26,13,46,.95);backdrop-filter:blur(20px);padding:1rem 2rem;display:flex;justify-content:space-between;align-items:center;position:fixed;top:0;left:0;right:0;z-index:100;border-bottom:1px solid var(--border-color);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+    .navbar-title{font-size:1.5rem;font-weight:700;color:#fff;background:linear-gradient(45deg,#a78bfa,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .navbar-logout-btn{background:var(--primary-purple);color:#fff;padding:.5rem 1.5rem;border-radius:var(--radius-sm);text-decoration:none;transition:all var(--transition-base);font-weight:500}
+    .navbar-logout-btn:hover{background:#6d28d9;transform:translateY(-2px);box-shadow:0 4px 15px rgba(124,58,237,.4)}
+    .app-layout{display:flex;margin-top:60px}
+    .sidebar{width:220px;background:rgba(26,13,46,.6);backdrop-filter:blur(10px);padding:2rem 0;border-right:1px solid var(--border-color);position:fixed;height:calc(100vh - 60px);overflow-y:auto}
+    .sidebar-item{display:block;padding:.75rem 1.5rem;color:var(--text-light);text-decoration:none;transition:all var(--transition-base);border-left:3px solid transparent;font-weight:500}
+    .sidebar-item:hover,.sidebar-item.active{background:var(--bg-card);border-left-color:var(--primary-purple);color:#fff}
+    .discover-container{flex:1;margin-left:220px;padding:var(--space-xl);max-width:1600px;margin-right:auto}
+    .header{background:linear-gradient(135deg,rgba(124,58,237,.2) 0%,rgba(168,85,247,.15) 100%);backdrop-filter:blur(20px);border:1px solid var(--border-color);border-radius:var(--radius-xl);padding:3rem;margin-bottom:var(--space-xl);position:relative;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+    .header h1{font-size:3rem;margin-bottom:var(--space-md);background:linear-gradient(135deg,#fff 0%,#a78bfa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;position:relative;z-index:1}
+    .header p{color:rgba(255,255,255,.85);font-size:1.1rem;line-height:1.7;max-width:800px;position:relative;z-index:1}
+    .section{background:linear-gradient(135deg,rgba(60,31,102,.3) 0%,rgba(26,13,46,.5) 100%);backdrop-filter:blur(20px);border:1px solid var(--border-color);border-radius:var(--radius-xl);padding:2rem;margin-bottom:var(--space-xl);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+    .section-title{display:flex;align-items:center;gap:.75rem;margin-bottom:var(--space-lg)}
+    .section-title h2{font-size:1.8rem;background:linear-gradient(135deg,#fff 0%,#a78bfa 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .moods{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:var(--space-lg)}
+    .mood-card{position:relative;border:1px solid var(--border-color);border-radius:18px;padding:1.25rem;background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.03));overflow:hidden;cursor:pointer;transition:transform .2s ease,box-shadow .2s ease}
+    .mood-card:hover{transform:translateY(-4px);box-shadow:0 10px 30px rgba(124,58,237,.35)}
+    .mood-emoji{font-size:1.8rem;margin-bottom:.5rem}
+    .featured{display:grid;grid-template-columns:1.2fr .8fr;gap:var(--space-xl)}
+    .featured-left h3{font-size:2rem;margin-bottom:.5rem}
+    .featured-meta{display:flex;gap:1rem;color:rgba(255,255,255,.8);font-size:.95rem;margin:1rem 0}
+    .cta-row{display:flex;gap:.75rem;margin-top:1rem}
+    .btn{padding:.8rem 1.2rem;border-radius:var(--radius-md);border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.1);color:#fff;cursor:pointer;transition:all .25s ease}
+    .btn:hover{background:rgba(255,255,255,.18);transform:translateY(-2px)}
+    .btn-primary{background:linear-gradient(135deg,var(--primary-purple) 0%,#a78bfa 100%);border:0}
+    .grid{display:grid;gap:1.25rem}
+    .grid.cols-4{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+    .grid.cols-3{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+    .card{position:relative;background:linear-gradient(135deg,rgba(60,31,102,.4) 0%,rgba(26,13,46,.6) 100%);backdrop-filter:blur(20px);border:1px solid var(--border-color);border-radius:18px;padding:1rem;overflow:hidden;transition:transform .2s ease,box-shadow .2s ease}
+    .card:hover{transform:translateY(-6px);box-shadow:0 16px 36px rgba(124,58,237,.35)}
+    .cover{border-radius:14px;background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.15),transparent 60%),linear-gradient(135deg,rgba(124,58,237,.35),rgba(236,72,153,.25));height:180px;display:flex;align-items:center;justify-content:center;font-size:2.25rem}
+    .badge{position:absolute;top:.75rem;right:.75rem;background:#10b981;color:#fff;padding:.25rem .6rem;border-radius:999px;font-size:.7rem;font-weight:700}
+    .title{font-weight:700;margin:.6rem 0 .25rem 0;color:#fff}
+    .subtitle{font-size:.92rem;color:rgba(255,255,255,.78);margin-bottom:.5rem}
+    .meta{display:flex;justify-content:space-between;color:rgba(255,255,255,.7);font-size:.88rem}
+    .pill{display:inline-flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.08);padding:.3rem .55rem;border-radius:999px;border:1px solid rgba(255,255,255,.12)}
+    .actions{display:flex;gap:.4rem;position:absolute;top:.6rem;left:.6rem}
+    .action{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(6px);color:#fff;border-radius:999px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .action.active{background:rgba(236,72,153,.35);border-color:rgba(236,72,153,.55)}
+    @media (max-width: 1024px){.discover-container{margin-left:0}.sidebar{transform:translateX(-100%)}.featured{grid-template-columns:1fr}}
+    @media (max-width: 768px){.discover-container{padding:var(--space-md)}.header{padding:2rem}.header h1{font-size:2rem}.grid.cols-4,.grid.cols-3{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-left"><span class="navbar-title">SinSay</span></div>
+    <div class="navbar-right"><a href="{{ url_for('logout') }}" class="navbar-logout-btn">Cerrar sesión</a></div>
+  </nav>
+
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-menu">
+        <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
+        <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+        <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+        <a class="sidebar-item active" href="{{ url_for('descubrir') }}">Descubrir</a>
+        <a class="sidebar-item" href="#">Recientes</a>
+      </div>
+    </aside>
+
+    <main class="discover-container">
+      <section class="header">
+        <h1>Descubrir</h1>
+        <p>Encuentra tu próxima gran historia con recomendaciones personalizadas según tu actividad y gustos.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>✨</span><h2>¿Cómo te sientes hoy?</h2></div>
+        <div class="moods" id="moodsGrid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>⭐</span><h2>Destacado de hoy</h2></div>
+        <div class="featured" id="featuredWrap">
+          <!-- Llenado dinámico -->
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>📈</span><h2>Tendencias</h2></div>
+        <div class="grid cols-4" id="trendingGrid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>🆕</span><h2>Nuevos lanzamientos</h2></div>
+        <div class="grid cols-3" id="newGrid"></div>
+      </section>
+
+      <section class="section" id="dayPartSection" style="display:none;">
+        <div class="section-title"><span id="dayPartIcon">🌅</span><h2 id="dayPartTitle">Para tu día</h2></div>
+        <div class="grid cols-4" id="dayPartGrid"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><span>💗</span><h2>Recomendado para ti</h2></div>
+        <div class="grid cols-4" id="forYouGrid"></div>
+      </section>
+
+      <section class="section" id="wellbeingSection" style="display:none;">
+        <div class="section-title"><span>💚</span><h2>Bienestar</h2></div>
+        <div id="wellbeingMsg" class="subtitle" style="margin-bottom:1rem;">Cuidemos tu equilibrio con una mezcla saludable.</div>
+        <div class="grid cols-4" id="wellbeingGrid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Estado y helpers
+    let booksData = [];
+    let liked = new Set(JSON.parse(localStorage.getItem('likedBooks') || '[]'));
+    let saved = new Set(JSON.parse(localStorage.getItem('savedBooks') || '[]'));
+
+    const moods = [
+      { key:'relax', name:'Relajación', emoji:'☕', categories:['aprendizaje','arte','cuentos'] },
+      { key:'energy', name:'Energía', emoji:'⚡', categories:['tecnologia','ciencia'] },
+      { key:'night', name:'Noche', emoji:'🌙', categories:['novelas','historia'] },
+      { key:'focus', name:'Concentración', emoji:'🎯', categories:['ciencia','aprendizaje'] },
+    ];
+
+    function norm(s){ return (s||'').toString().trim().toLowerCase(); }
+    function shuffle(arr){ return arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]); }
+    function objectIdToDate(id){ try{ return new Date(parseInt(id.substring(0,8),16)*1000);}catch(e){ return new Date(0);} }
+    function topCategory(list){ const c={}; list.forEach(b=>{ c[b.category]=(c[b.category]||0)+1;}); return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||''; }
+    function saveSets(){ localStorage.setItem('likedBooks', JSON.stringify(Array.from(liked))); localStorage.setItem('savedBooks', JSON.stringify(Array.from(saved))); }
+
+    function coverPlaceholder(text){
+      const initials = (text||'S').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+      return `<div class="cover">${initials}</div>`;
+    }
+
+    function buildCard(b){
+      const likeActive = liked.has(b._id) ? 'active' : '';
+      const saveActive = saved.has(b._id) ? 'active' : '';
+      return `
+        <div class="card" onclick="openBook('${b._id}')">
+          <div class="actions" onclick="event.stopPropagation()">
+            <button class="action ${saveActive}" title="Guardar" onclick="toggleSave('${b._id}')">🔖</button>
+            <button class="action ${likeActive}" title="Me gusta" onclick="toggleLike('${b._id}')">💗</button>
+          </div>
+          ${coverPlaceholder(b.title)}
+          <div class="badge">${b.categoryLabel || 'Contenido'}</div>
+          <div class="title">${b.title}</div>
+          <div class="subtitle">${b.subtitle || ''}</div>
+          <div class="meta">
+            <span class="pill">⏱️ ${b.duration || ''}</span>
+            <span class="pill">${b.levelLabel || ''}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMoods(){
+      const grid = document.getElementById('moodsGrid');
+      grid.innerHTML = moods.map(m => `
+        <div class="mood-card" onclick="applyMood('${m.key}')">
+          <div class="mood-emoji">${m.emoji}</div>
+          <div class="title" style="margin:0">${m.name}</div>
+          <div class="subtitle">Sugerencias ${m.name.toLowerCase()}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderFeatured(){
+      const wrap = document.getElementById('featuredWrap');
+      if (!booksData.length){ wrap.innerHTML = '<div class="subtitle">No hay contenido disponible aún.</div>'; return; }
+      // Destacado: el más reciente
+      const sorted = [...booksData].sort((a,b)=>objectIdToDate(b._id)-objectIdToDate(a._id));
+      const b = sorted[0];
+      wrap.innerHTML = `
+        <div class="featured-left">
+          <h3>${b.title}</h3>
+          <div class="subtitle">${b.subtitle || ''}</div>
+          <div class="featured-meta">
+            <span class="pill">📚 ${b.categoryLabel || b.category || ''}</span>
+            <span class="pill">🧭 ${b.levelLabel || b.level || ''}</span>
+            <span class="pill">⏱️ ${b.duration || ''}</span>
+          </div>
+          <div class="cta-row">
+            <button class="btn btn-primary" onclick="openBook('${b._id}')">▶ Reproducir</button>
+            <button class="btn" onclick="toggleSave('${b._id}')">🔖 Guardar</button>
+            <button class="btn" onclick="toggleLike('${b._id}')">💗 Me gusta</button>
+          </div>
+        </div>
+        <div>
+          ${coverPlaceholder(b.title)}
+        </div>
+      `;
+    }
+
+    function renderTrending(){
+      const grid = document.getElementById('trendingGrid');
+      if (!booksData.length){ grid.innerHTML = ''; return; }
+      const cat = topCategory(booksData);
+      const list = (cat ? booksData.filter(b=>b.category===cat) : booksData).slice(0, 12);
+      const picks = shuffle(list).slice(0,4);
+      grid.innerHTML = picks.map(buildCard).join('');
+    }
+
+    function renderNew(){
+      const grid = document.getElementById('newGrid');
+      const sorted = [...booksData].sort((a,b)=>objectIdToDate(b._id)-objectIdToDate(a._id));
+      grid.innerHTML = sorted.slice(0,3).map(buildCard).join('');
+    }
+
+    function renderDayPart(){
+      const sec = document.getElementById('dayPartSection');
+      const grid = document.getElementById('dayPartGrid');
+      const title = document.getElementById('dayPartTitle');
+      const icon = document.getElementById('dayPartIcon');
+      if (!booksData.length || !sec || !grid) return;
+      const h = new Date().getHours();
+      let moodKey = 'energy', label = 'Para tu mañana', ic = '🌅', cats = [];
+      if (h >= 5 && h < 12){ moodKey='energy'; label='Para tu mañana'; ic='🌅'; cats=['tecnologia','ciencia','aprendizaje']; }
+      else if (h >= 12 && h < 18){ moodKey='focus'; label='Para concentrarte esta tarde'; ic='🌞'; cats=['ciencia','aprendizaje']; }
+      else { moodKey='night'; label='Para tu noche'; ic='🌙'; cats=['novelas','cuentos','arte']; }
+      title.textContent = label; icon.textContent = ic;
+      const list = booksData.filter(b=> cats.includes((b.category||'').toLowerCase()));
+      grid.innerHTML = (list.length? list: booksData).slice(0,8).map(buildCard).join('');
+      sec.style.display='block';
+    }
+
+    function recentFromLocal(){
+      try{ const ids = JSON.parse(localStorage.getItem('recentBooks')||'[]'); return Array.isArray(ids)? ids: []; }catch(e){ return []; }
+    }
+    function lastPlayed(){
+      try{ return JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null'); }catch(e){ return null; }
+    }
+    function forYouList(){
+      const ids = recentFromLocal();
+      const byId = new Map(booksData.map(b=>[b._id,b]));
+      const recentBooks = ids.map(id=>byId.get(id)).filter(Boolean);
+      if (recentBooks.length){
+        const cat = topCategory(recentBooks);
+        return booksData.filter(b=>b.category===cat).slice(0,8);
+      }
+      // Considerar última reproducción guardada por Home/Reproductor
+      const lp = lastPlayed();
+      if (lp){
+        const cat = lp.category || lp.categoryLabel && norm(lp.categoryLabel);
+        if (cat){
+          const normCat = typeof cat === 'string' ? cat : '';
+          const list = booksData.filter(b=> norm(b.category)===norm(normCat) || norm(b.categoryLabel)===norm(normCat));
+          if (list.length) return list.slice(0,8);
+        }
+      }
+      // fallback: categoría más popular
+      const cat = topCategory(booksData);
+      return booksData.filter(b=>b.category===cat).slice(0,8);
+    }
+    function renderForYou(){
+      const grid = document.getElementById('forYouGrid');
+      grid.innerHTML = forYouList().map(buildCard).join('');
+    }
+
+    function renderWellbeing(){
+      const sec = document.getElementById('wellbeingSection');
+      const grid = document.getElementById('wellbeingGrid');
+      const msg = document.getElementById('wellbeingMsg');
+      if (!booksData.length) { sec.style.display='none'; return; }
+      // analizar últimos eventos locales
+      let history = [];
+      try{ history = JSON.parse(localStorage.getItem('sinsay:playEvents')||'[]'); }catch(e){}
+      history = Array.isArray(history)? history.slice(-20): [];
+      const catCount = {};
+      history.forEach(ev => { const c=(ev.category||'').toLowerCase(); if(c) catCount[c]=(catCount[c]||0)+1; });
+      const total = Object.values(catCount).reduce((a,b)=>a+b,0);
+      let advice = '';
+      // simple heurística de balance
+      const dominant = Object.entries(catCount).sort((a,b)=>b[1]-a[1])[0];
+      if (dominant && total >= 6 && dominant[1] / total >= 0.7){
+        advice = `Has escuchado mucho de "${dominant[0]}". Te propongo variar un poco ✨`;
+      } else if (total >= 6){
+        advice = 'Buen balance. Probemos algo relajante para descansar.';
+      } else {
+        advice = 'Construyamos una mezcla variada para ti.';
+      }
+      msg.textContent = advice;
+      // seleccionar categorías complementarias
+      const complements = {
+        'tecnologia': ['arte','novelas','cuentos'],
+        'ciencia': ['arte','novelas','historia'],
+        'aprendizaje': ['novelas','cuentos'],
+        'noticias': ['arte','novelas'],
+        'novelas': ['ciencia','tecnologia'],
+        'cuentos': ['ciencia','tecnologia'],
+        'arte': ['ciencia','aprendizaje'],
+        'historia': ['tecnologia','ciencia']
+      };
+      let targetCats = [];
+      if (dominant){ targetCats = (complements[dominant[0]]||[]); }
+      if (!targetCats.length){ targetCats = ['arte','novelas','cuentos','ciencia','aprendizaje']; }
+      const list = booksData.filter(b=> targetCats.includes((b.category||'').toLowerCase()));
+      grid.innerHTML = (list.length? list: booksData).slice(0,8).map(buildCard).join('');
+      sec.style.display='block';
+    }
+
+    // Playlists automáticas simples
+    function sleepPlaylist(){
+      // Selección suave por categorías relajantes
+      const soothingCats = ['novelas','cuentos','arte'];
+      const list = booksData.filter(b=> soothingCats.includes((b.category||'').toLowerCase()));
+      return (list.length? list: booksData).slice(0,8);
+    }
+    function renderAutoPlaylists(){
+      const sec = document.createElement('section');
+      sec.className='section';
+      sec.innerHTML = `
+        <div class="section-title"><span>🛌</span><h2>Para dormir mejor</h2></div>
+        <div class="grid cols-4" id="sleepGrid"></div>
+      `;
+      document.querySelector('.discover-container').appendChild(sec);
+      const grid = document.getElementById('sleepGrid');
+      grid.innerHTML = sleepPlaylist().map(buildCard).join('');
+    }
+
+    function applyMood(key){
+      const mood = moods.find(m=>m.key===key);
+      if (!mood || !booksData.length) return;
+      const list = booksData.filter(b=>mood.categories.includes(b.category));
+      const grid = document.getElementById('forYouGrid');
+      grid.innerHTML = (list.length? list: shuffle(booksData)).slice(0,8).map(buildCard).join('');
+    }
+
+    // Acciones
+    function openBook(bookId){ if (!bookId) return; window.location.href = `/reproductor/${bookId}`; }
+    function toggleLike(id){ if (liked.has(id)) liked.delete(id); else liked.add(id); saveSets(); renderForYou(); renderTrending(); }
+    function toggleSave(id){ if (saved.has(id)) saved.delete(id); else saved.add(id); saveSets(); }
+    window.openBook = openBook; window.toggleLike = toggleLike; window.toggleSave = toggleSave; window.applyMood = applyMood;
+
+    async function loadBooks(){
+      try{
+        const r = await fetch('/api/libros');
+        const data = await r.json();
+        booksData = data.libros || [];
+        renderMoods();
+        renderFeatured();
+        renderTrending();
+        renderNew();
+        renderForYou();
+        renderWellbeing();
+        renderDayPart();
+      } catch(e){ console.error('Error cargando libros', e); }
+    }
+
+    loadBooks();
+    // Contexto: detectar movimiento simple (modo transporte) y guardar en localStorage
+    (function(){
+      if (!('geolocation' in navigator)) return;
+      let last = null;
+      navigator.geolocation.watchPosition(pos=>{
+        const { latitude, longitude, speed } = pos.coords; // speed in m/s (may be null)
+        const ctx = { ts: Date.now(), lat: latitude, lon: longitude, speed: speed||0 };
+        localStorage.setItem('sinsay:context', JSON.stringify(ctx));
+      }, ()=>{}, { enableHighAccuracy: true, maximumAge: 15000, timeout: 10000 });
+    })();
+    // Voice assistant on this page
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const s = document.createElement('script'); s.src='/static/assistant.js'; document.body.appendChild(s);
+      setTimeout(renderAutoPlaylists, 800);
+    });
+  </script>
+</body>
+</html>

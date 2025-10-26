@@ -515,13 +515,12 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-menu">
-                <a class="sidebar-item" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
                 <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+                <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
                 <a class="sidebar-item active" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
                 <a class="sidebar-item" href="#">Recientes</a>
-                <a class="sidebar-item" href="#">Favoritos</a>
-                <a class="sidebar-item" href="#">Quiénes somos</a>
-                <a class="sidebar-item" href="#">Ayuda</a>
+                
             </div>
         </aside>
 
@@ -602,6 +601,21 @@
                         required
                     ></textarea>
                     <div class="helper-text">Escribe una breve descripción que ayude a los usuarios a entender de qué trata el libro.</div>
+                </div>
+
+                <!-- Contenido del libro (opcional) -->
+                <div class="form-group">
+                    <label class="form-label" for="contentText">
+                        Contenido (opcional)
+                    </label>
+                    <textarea 
+                        id="contentText" 
+                        name="contentText" 
+                        class="form-textarea" 
+                        placeholder="Pega aquí el texto original del contenido para habilitar el seguimiento sincronizado con el audio..."
+                        minlength="0"
+                    ></textarea>
+                    <div class="helper-text">Si adjuntas el texto, el reproductor mostrará y resaltará el contenido a medida que avanza el audio.</div>
                 </div>
 
                 <!-- Categoría y Nivel -->

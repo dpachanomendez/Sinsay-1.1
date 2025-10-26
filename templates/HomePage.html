@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>Inicio - SinSay</title>
+	<style>
+		:root {
+			--primary-purple: #7c3aed;
+			--dark-purple: #3c1f66;
+			--bg-dark: #1a0d2e;
+			--bg-card: rgba(124, 58, 237, 0.1);
+			--border-color: rgba(124, 58, 237, 0.3);
+			--text-light: #e0e0e0;
+		}
+
+		* { margin: 0; padding: 0; box-sizing: border-box; }
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+			background: linear-gradient(135deg, #1a0d2e 0%, #3c1f66 100%);
+			color: var(--text-light);
+			min-height: 100vh;
+		}
+
+		/* Navbar */
+		.navbar {
+			background: rgba(26, 13, 46, 0.9);
+			backdrop-filter: blur(10px);
+			padding: 1rem 2rem;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+			border-bottom: 1px solid var(--border-color);
+		}
+		.navbar-title {
+			font-size: 1.5rem; font-weight: bold; color: white;
+			background: linear-gradient(45deg, #a78bfa, #ec4899);
+			-webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+		}
+		.navbar-logout-btn {
+			background: var(--primary-purple); color: white; padding: 0.5rem 1.5rem; border-radius: 8px; text-decoration: none; transition: .3s;
+		}
+		.navbar-logout-btn:hover { background: #6d28d9; transform: translateY(-2px); }
+
+		/* Layout */
+		.app-layout { display: flex; margin-top: 60px; }
+		.sidebar {
+			width: 220px; background: rgba(26, 13, 46, 0.6); backdrop-filter: blur(10px);
+			padding: 2rem 0; border-right: 1px solid var(--border-color);
+			position: fixed; height: calc(100vh - 60px); overflow-y: auto;
+		}
+		.sidebar-item { display: block; padding: .75rem 1.5rem; color: var(--text-light); text-decoration: none; transition: .3s; border-left: 3px solid transparent; }
+		.sidebar-item:hover, .sidebar-item.active { background: var(--bg-card); border-left-color: var(--primary-purple); color: white; }
+		.content { margin-left: 220px; flex: 1; padding: 2rem; padding-bottom: 120px; }
+
+		/* Hero */
+		.hero {
+			background: linear-gradient(135deg, rgba(124,58,237,.2), rgba(168,85,247,.15));
+			border: 1px solid var(--border-color); border-radius: 20px; padding: 2rem; margin-bottom: 1.5rem; position: relative; overflow: hidden;
+		}
+		.hero h2 { font-size: 2rem; background: linear-gradient(135deg, #fff, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+		.hero p { color: rgba(255,255,255,.8); margin-top: .25rem; }
+
+		/* Sections */
+		.section { margin-top: 1.5rem; }
+		.section-title { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
+		.section-title h3 { font-size: 1.25rem; font-weight: 700; }
+		.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+
+		/* Cards */
+		.card {
+			background: linear-gradient(135deg, rgba(60,31,102,.4), rgba(26,13,46,.6));
+			border: 1px solid var(--border-color); border-radius: 16px; padding: 1rem; position: relative; overflow: hidden;
+			transition: .3s; cursor: pointer;
+		}
+		.card:hover { transform: translateY(-6px); border-color: #a78bfa; box-shadow: 0 12px 30px rgba(124,58,237,.3); }
+	.cover { width: 100%; aspect-ratio: 1/1; border-radius: 12px; background: linear-gradient(135deg, rgba(124,58,237,.25), rgba(236,72,153,.25)); display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.1rem; margin-bottom: .75rem; overflow: hidden; }
+	.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+		.title { font-weight: 700; }
+		.subtitle { color: rgba(255,255,255,.75); font-size: .95rem; margin-top: .25rem; }
+		.meta { display:flex; align-items:center; gap:.75rem; margin-top:.75rem; font-size:.9rem; color:rgba(255,255,255,.85) }
+		.badge { display:inline-flex; padding:.25rem .6rem; border-radius:9999px; background: linear-gradient(135deg, rgba(124,58,237,.8), rgba(168,85,247,.8)); font-size:.7rem; text-transform:uppercase; letter-spacing:.5px; }
+		.play-btn { position:absolute; bottom:1rem; right:1rem; width:44px; height:44px; border-radius:9999px; border:none; background:#ec4899; color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 20px rgba(236,72,153,.35); }
+		.play-btn:hover { transform: scale(1.05); }
+
+		/* Player */
+		.player-bar {
+			position: fixed; left: 0; right: 0; bottom: 0;
+			background: rgba(0,0,0,.35); backdrop-filter: blur(16px);
+			border-top: 1px solid var(--border-color);
+			padding: .75rem 1rem; z-index: 90;
+		}
+		.player {
+			max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 320px 1fr 260px; align-items: center; gap: 1rem;
+		}
+		.song-info { display:flex; align-items:center; gap:.75rem; min-width:0; }
+		.song-cover { width:56px; height:56px; border-radius:10px; background: linear-gradient(135deg, rgba(124,58,237,.35), rgba(236,72,153,.35)); display:grid; place-items:center; font-weight:700; }
+		.song-title { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+		.song-artist { font-size:.85rem; color:rgba(255,255,255,.75); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+		.controls { display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+		.buttons { display:flex; align-items:center; gap:.75rem; }
+		.round { width:36px; height:36px; border-radius:9999px; border:none; background: rgba(255,255,255,.15); color:white; display:flex; align-items:center; justify-content:center; }
+		.round.primary { width:42px; height:42px; background:white; color:black; }
+		.seek { display:flex; align-items:center; gap:.5rem; width:100%; max-width:640px; }
+		.progress { flex:1; height:6px; background: rgba(255,255,255,.2); border-radius:9999px; position:relative; cursor:pointer; }
+		.progress > span { position:absolute; left:0; top:0; bottom:0; background: linear-gradient(90deg, #7c3aed, #ec4899); border-radius:9999px; }
+		.time { font-size:.75rem; color:rgba(255,255,255,.7); width:38px; text-align:center; }
+		.volume { display:flex; align-items:center; gap:.5rem; }
+		.vol-rail { flex:1; height:6px; background: rgba(255,255,255,.2); border-radius:9999px; position:relative; }
+		.vol-rail > span { position:absolute; left:0; top:0; bottom:0; background:white; border-radius:9999px; width:75%; }
+
+		@media (max-width: 1024px) {
+			.content { margin-left: 0; }
+			.sidebar { transform: translateX(-100%); }
+			.player { grid-template-columns: 1fr; gap:.75rem; }
+		}
+	</style>
+</head>
+<body>
+	<nav class="navbar">
+		<div class="navbar-left">
+			<span class="navbar-title">SinSay</span>
+		</div>
+		<div class="navbar-right">
+			<a href="{{ url_for('logout') }}" class="navbar-logout-btn">Cerrar sesión</a>
+		</div>
+	</nav>
+
+	<div class="app-layout">
+		<!-- Banner continuar -->
+		<div id="continueBanner" style="display:none; position:fixed; left:220px; right:0; top:60px; z-index:95;">
+			<div style="margin: .5rem 1rem; background: rgba(16,185,129,.15); border:1px solid rgba(16,185,129,.35); color:#eafff7; border-radius:12px; padding:.75rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:.75rem;">
+				<div style="display:flex; align-items:center; gap:.5rem; min-width:0;">
+					<span>⏯️</span>
+					<div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+						<strong>¿Continuar donde lo dejaste?</strong>
+						<span id="continueBannerText" style="opacity:.9; margin-left:.35rem;"></span>
+					</div>
+				</div>
+				<div style="display:flex; gap:.5rem;">
+					<button id="continueBtn" class="navbar-logout-btn" style="background:#10b981; border:0; padding:.4rem 1rem;">Reanudar</button>
+					<button id="dismissBanner" class="navbar-logout-btn" style="background:rgba(255,255,255,.15); border:0; padding:.4rem .8rem;">✕</button>
+				</div>
+			</div>
+		</div>
+		<aside class="sidebar">
+			<div class="sidebar-menu">
+				<a class="sidebar-item active" href="{{ url_for('home') }}">Inicio</a>
+				<a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+				<a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+				<a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+				
+				<a class="sidebar-item" href="{{ url_for('index') }}">Convertir a Audio</a>
+			</div>
+		</aside>
+
+		<main class="content">
+			<section class="hero">
+				<h2>Bienvenido de vuelta</h2>
+				<p>Continúa donde lo dejaste. Tu última reproducción aparecerá abajo.</p>
+			</section>
+
+			<!-- Última reproducción -->
+			<section class="section" id="lastPlaySection" style="display:none;">
+				<div class="section-title">
+					<span>▶</span>
+					<h3>Tu última reproducción</h3>
+				</div>
+				<div id="lastPlayCard" class="card" aria-live="polite"></div>
+			</section>
+
+			<!-- En tendencia (lo más reciente) -->
+			<section class="section">
+				<div class="section-title">
+					<span>🔥</span>
+					<h3>En Tendencia</h3>
+				</div>
+				<div id="trendingGrid" class="grid"></div>
+			</section>
+
+			<!-- Reproducidos recientemente (local) -->
+			<section class="section">
+				<div class="section-title">
+					<span>⏱️</span>
+					<h3>Reproducidos recientemente</h3>
+				</div>
+				<div id="recentList"></div>
+			</section>
+		</main>
+	</div>
+
+	<!-- Player inferior -->
+	<div class="player-bar">
+		<div class="player">
+			<div class="song-info">
+				<div class="song-cover" id="playerCover">♪</div>
+				<div style="min-width:0;">
+					<div class="song-title" id="playerTitle">Sin reproducción</div>
+					<div class="song-artist" id="playerSubtitle">Selecciona un libro para comenzar</div>
+				</div>
+			</div>
+
+			<div class="controls">
+				<div class="buttons">
+					<button class="round" id="btnPrev" title="Anterior" aria-label="Anterior">⏮</button>
+					<button class="round primary" id="btnPlay" title="Reproducir/Pausar" aria-label="Reproducir">▶</button>
+					<button class="round" id="btnNext" title="Siguiente" aria-label="Siguiente">⏭</button>
+				</div>
+				<div class="seek">
+					<span class="time" id="timeCurrent">0:00</span>
+					<div class="progress" id="progress">
+						<span id="progressFill" style="width:0%;"></span>
+					</div>
+					<span class="time" id="timeTotal">0:00</span>
+				</div>
+			</div>
+
+			<div class="volume">
+				<span style="opacity:.7;">🔊</span>
+				<div class="vol-rail" id="volRail"><span id="volFill"></span></div>
+			</div>
+		</div>
+		<audio id="audioEl" preload="metadata"></audio>
+	</div>
+
+	<script>
+		// Estado
+		let libros = [];
+		let queue = []; // cola sencilla para anterior/siguiente
+		let currentIndex = -1;
+
+		const audioEl = document.getElementById('audioEl');
+		const btnPlay = document.getElementById('btnPlay');
+		const btnPrev = document.getElementById('btnPrev');
+		const btnNext = document.getElementById('btnNext');
+		const timeCurrent = document.getElementById('timeCurrent');
+		const timeTotal = document.getElementById('timeTotal');
+		const progress = document.getElementById('progress');
+		const progressFill = document.getElementById('progressFill');
+		const volRail = document.getElementById('volRail');
+		const volFill = document.getElementById('volFill');
+		const playerTitle = document.getElementById('playerTitle');
+		const playerSubtitle = document.getElementById('playerSubtitle');
+
+		function formatTime(s){
+			if (!s || isNaN(s)) return '0:00';
+			const m = Math.floor(s/60); const ss = Math.floor(s%60);
+			return `${m}:${ss.toString().padStart(2,'0')}`;
+		}
+
+		function setTrackByIndex(i){
+			if (i < 0 || i >= queue.length) return;
+			currentIndex = i;
+			const item = queue[currentIndex];
+			audioEl.src = item.audio_url;
+			playerTitle.textContent = item.title || 'Sin título';
+			playerSubtitle.textContent = item.subtitle || '';
+			// Guardar última reproducción en localStorage
+			localStorage.setItem('sinsay:lastPlayed', JSON.stringify({
+				_id: item._id, title: item.title, subtitle: item.subtitle, audio_url: item.audio_url,
+				categoryLabel: item.categoryLabel, levelLabel: item.levelLabel, duration: item.duration,
+				playedAt: Date.now()
+			}));
+			audioEl.play().catch(()=>{});
+			btnPlay.textContent = '⏸';
+			renderRecent();
+		}
+
+		function playLibro(libro){
+			// Si ya está en la cola, saltar a ese índice; si no, empujarlo al final
+			const idx = queue.findIndex(x => x._id === libro._id);
+			if (idx === -1){ queue.push(libro); setTrackByIndex(queue.length-1); }
+			else { setTrackByIndex(idx); }
+		}
+
+		// Controles
+		btnPlay.addEventListener('click', ()=>{
+			if (!audioEl.src) return;
+			if (audioEl.paused){ audioEl.play(); btnPlay.textContent='⏸'; }
+			else { audioEl.pause(); btnPlay.textContent='▶'; }
+		});
+		btnPrev.addEventListener('click', ()=>{ if (currentIndex>0) setTrackByIndex(currentIndex-1); });
+		btnNext.addEventListener('click', ()=>{ if (currentIndex<queue.length-1) setTrackByIndex(currentIndex+1); });
+
+		audioEl.addEventListener('loadedmetadata', ()=>{
+			timeTotal.textContent = formatTime(audioEl.duration);
+		});
+		audioEl.addEventListener('timeupdate', ()=>{
+			timeCurrent.textContent = formatTime(audioEl.currentTime);
+			const p = (audioEl.currentTime / (audioEl.duration||1))*100;
+			progressFill.style.width = p + '%';
+		});
+		audioEl.addEventListener('ended', ()=>{ btnPlay.textContent='▶'; });
+
+		// Registrar eventos de escucha para recomendaciones (historial local)
+		audioEl.addEventListener('play', ()=>{
+			try{
+				const lp = JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null');
+				const ev = { ts: Date.now(), title: lp?.title||'', category: lp?.category||lp?.categoryLabel||'', id: lp?._id||'' };
+				const arr = JSON.parse(localStorage.getItem('sinsay:playEvents')||'[]');
+				arr.push(ev); localStorage.setItem('sinsay:playEvents', JSON.stringify(arr.slice(-500)));
+			}catch(e){}
+		});
+
+		progress.addEventListener('click', (e)=>{
+			const rect = progress.getBoundingClientRect();
+			const pct = (e.clientX - rect.left) / rect.width;
+			audioEl.currentTime = pct * (audioEl.duration||0);
+		});
+
+		volRail.addEventListener('click', (e)=>{
+			const rect = volRail.getBoundingClientRect();
+			const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+			audioEl.volume = pct; volFill.style.width = (pct*100)+'%';
+		});
+
+		// Renderizado de secciones
+		function renderTrending(list){
+			const cont = document.getElementById('trendingGrid');
+			cont.innerHTML = list.slice(0,8).map(b=>`
+				<div class="card" onclick="window.location.href='/reproductor/${b._id}'">
+					<div class="cover">${b.cover_image_url ? `<img src="${b.cover_image_url}" alt="Portada"/>` : (b.categoryLabel||'Libro')}</div>
+					<div class="title">${b.title||''}</div>
+					<div class="subtitle">${b.subtitle||''}</div>
+					<div class="meta">
+						<span class="badge">${b.levelLabel||''}</span>
+						<span>⏱️ ${b.duration||''}</span>
+					</div>
+					<button class="play-btn" title="Reproducir" aria-label="Reproducir" onclick="event.stopPropagation(); window.playFromCard('${b._id}')">▶</button>
+				</div>
+			`).join('');
+		}
+
+		function renderLastPlayed(lp){
+			const sec = document.getElementById('lastPlaySection');
+			const card = document.getElementById('lastPlayCard');
+			if (!lp){ sec.style.display='none'; return; }
+			sec.style.display='block';
+			card.innerHTML = `
+				<div style="display:flex; gap:1rem; align-items:center;">
+					<div class="cover" style="width:120px; height:120px;">${lp.categoryLabel||'Libro'}</div>
+					<div style="flex:1; min-width:0;">
+						<div class="title" style="font-size:1.25rem;">${lp.title||''}</div>
+						<div class="subtitle" style="margin:.25rem 0 0.5rem;">${lp.subtitle||''}</div>
+						<div class="meta"><span class="badge">${lp.levelLabel||''}</span><span>⏱️ ${lp.duration||''}</span></div>
+					</div>
+					<div>
+						<button class="play-btn" onclick="window.playFromLast()" title="Reproducir">▶</button>
+					</div>
+				</div>
+			`;
+		}
+
+		function renderRecent(){
+			const holder = document.getElementById('recentList');
+			const lp = JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null');
+			if (!lp){ holder.innerHTML = '<div style="opacity:.7;">No hay reproducciones recientes.</div>'; return; }
+			holder.innerHTML = `
+				<div class="card" style="display:flex; align-items:center; gap:1rem;">
+					<div class="cover" style="width:64px; height:64px;">${lp.categoryLabel||'Libro'}</div>
+					<div style="flex:1; min-width:0;">
+						<div class="title" style="font-size:1rem;">${lp.title||''}</div>
+						<div class="subtitle">${lp.subtitle||''}</div>
+					</div>
+					<div class="meta" style="gap:.5rem;">
+						<span>⏱️ ${lp.duration||''}</span>
+						<button class="play-btn" style="width:38px;height:38px;" onclick="window.playFromLast()">▶</button>
+					</div>
+				</div>
+			`;
+		}
+
+		// Exponer helpers simples para botones en HTML
+		window.playFromCard = function(id){ const libro = libros.find(x=>x._id===id); if (libro) playLibro(libro); }
+		window.playFromLast = function(){ const lp = JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null'); if (lp) playLibro(lp); }
+
+		async function loadLibros(){
+			try {
+				const res = await fetch('/api/libros');
+				const data = await res.json();
+				libros = data.libros || [];
+				// Ordenar por uploaded_at descendente si existe, si no mantener
+				libros.sort((a,b)=> (b.uploaded_at||0) - (a.uploaded_at||0));
+				renderTrending(libros);
+				queue = [...libros];
+
+				const last = JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null');
+				renderLastPlayed(last || libros[0]);
+				renderRecent();
+				// Autopreparar player sin reproducir
+				if (last){
+					playerTitle.textContent = last.title||'';
+					playerSubtitle.textContent = last.subtitle||'';
+					audioEl.src = last.audio_url||'';
+				} else if (libros[0]){
+					playerTitle.textContent = libros[0].title||'';
+					playerSubtitle.textContent = libros[0].subtitle||'';
+					audioEl.src = libros[0].audio_url||'';
+				}
+			} catch (e){ console.error('Error cargando libros', e); }
+		}
+
+		document.addEventListener('DOMContentLoaded', async ()=>{
+			try{
+				// Backfill de portadas para que se vean al tiro
+				await fetch('/api/admin/backfill-covers', { method: 'POST' });
+			}catch(e){ /* ignore */ }
+			loadLibros();
+		});
+
+		// Banner continuar
+		document.addEventListener('DOMContentLoaded', ()=>{
+			try{
+				const lp = JSON.parse(localStorage.getItem('sinsay:lastPlayed')||'null');
+				const banner = document.getElementById('continueBanner');
+				const text = document.getElementById('continueBannerText');
+				const btn = document.getElementById('continueBtn');
+				const dismiss = document.getElementById('dismissBanner');
+				if (lp && banner){
+					text.textContent = `"${lp.title||''}" — ${lp.subtitle||''}`;
+					banner.style.display = 'block';
+					btn.onclick = ()=>{ window.playFromLast(); banner.style.display='none'; };
+					dismiss.onclick = ()=>{ banner.style.display='none'; };
+				}
+			}catch(e){}
+		});
+	</script>
+    
+	<!-- AI Chat Floating Widget -->
+	<style>
+		.ai-fab{position:fixed;right:20px;bottom:92px;width:56px;height:56px;border-radius:9999px;border:1px solid rgba(255,255,255,.25);background:linear-gradient(135deg,rgba(124,58,237,.95),rgba(236,72,153,.95));color:#fff;z-index:95;box-shadow:0 8px 24px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:.5px}
+		.ai-fab:hover{transform:translateY(-2px)}
+		.ai-modal{position:fixed;right:20px;bottom:160px;width:360px;max-width:90vw;background:rgba(26,13,46,.92);border:1px solid rgba(124,58,237,.35);backdrop-filter:blur(16px);border-radius:16px;box-shadow:0 16px 40px rgba(0,0,0,.45);display:none;flex-direction:column;overflow:hidden;z-index:96}
+		.ai-header{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1rem;background:linear-gradient(135deg,rgba(124,58,237,.35),rgba(168,85,247,.25));border-bottom:1px solid rgba(124,58,237,.35)}
+		.ai-title{font-weight:800;background:linear-gradient(135deg,#fff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+		.ai-close{background:transparent;border:0;color:#fff;opacity:.85;font-size:1.1rem;cursor:pointer}
+		.ai-body{display:flex;flex-direction:column;gap:.5rem;padding:.75rem 1rem;max-height:50vh;overflow:auto}
+		.ai-msg{display:flex;gap:.5rem}
+		.ai-msg.user{justify-content:flex-end}
+		.ai-bubble{max-width:80%;padding:.6rem .8rem;border-radius:12px;border:1px solid rgba(255,255,255,.1)}
+		.ai-bubble.user{background:linear-gradient(135deg,rgba(124,58,237,.5),rgba(236,72,153,.45));color:#fff}
+		.ai-bubble.bot{background:rgba(255,255,255,.06);color:#fff}
+		.ai-footer{display:flex;align-items:center;gap:.5rem;padding:.6rem;border-top:1px solid rgba(124,58,237,.25);background:rgba(26,13,46,.85)}
+		.ai-input{flex:1;padding:.6rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.25);color:#fff;outline:none}
+		.ai-btn{padding:.55rem .9rem;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;cursor:pointer}
+		.ai-mic{width:40px;height:40px;border-radius:9999px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+		.ai-mic.active{background:rgba(236,72,153,.35)}
+	</style>
+	<button id="aiFab" class="ai-fab" title="Asistente IA">AI</button>
+	<div id="aiModal" class="ai-modal" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+		<div class="ai-header">
+			<div class="ai-title" id="aiTitle">Asistente IA</div>
+			<button class="ai-close" id="aiClose" aria-label="Cerrar">✕</button>
+		</div>
+		<div class="ai-body" id="aiBody" aria-live="polite"></div>
+		<div class="ai-footer">
+			<input id="aiInput" class="ai-input" placeholder="Escribe aquí... Ej: reproduce un libro de novela" />
+			<button id="aiSend" class="ai-btn">Enviar</button>
+			<button id="aiMic" class="ai-mic" title="Hablar" aria-label="Hablar">🎤</button>
+		</div>
+	</div>
+	<script>
+		(function(){
+			const fab = document.getElementById('aiFab');
+			const modal = document.getElementById('aiModal');
+			const closeBtn = document.getElementById('aiClose');
+			const body = document.getElementById('aiBody');
+			const input = document.getElementById('aiInput');
+			const send = document.getElementById('aiSend');
+			const mic = document.getElementById('aiMic');
+
+			function speak(text){
+				try{ if (window.SinsayAssistant && typeof window.SinsayAssistant.speak==='function'){ window.SinsayAssistant.speak(text); return; } }catch(e){}
+				try{ const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; speechSynthesis.speak(u);}catch(e){}
+			}
+			function addMsg(who, text){
+				const row = document.createElement('div'); row.className = 'ai-msg ' + (who==='user'?'user':'bot');
+				const bub = document.createElement('div'); bub.className = 'ai-bubble ' + (who==='user'?'user':'bot');
+				bub.textContent = text; row.appendChild(bub); body.appendChild(row); body.scrollTop = body.scrollHeight;
+			}
+			function setPending(){ const row=document.createElement('div'); row.className='ai-msg bot'; row.dataset.pending='1'; const b=document.createElement('div'); b.className='ai-bubble bot'; b.textContent='…'; row.appendChild(b); body.appendChild(row); body.scrollTop = body.scrollHeight; return row; }
+			function clearPending(p){ if (p && p.parentNode) p.parentNode.removeChild(p); }
+
+			// Local controls for Home player (play/pause/next/prev)
+			function playToggle(){
+				try{
+					const audio = document.getElementById('audioEl');
+					const btn = document.getElementById('btnPlay');
+					if (!audio) return false;
+					if (audio.paused){ audio.play(); if (btn) btn.textContent='⏸'; }
+					else { audio.pause(); if (btn) btn.textContent='▶'; }
+					return true;
+				}catch(e){ return false; }
+			}
+			function nextTrack(){ try{ const b=document.getElementById('btnNext'); if(b){ b.click(); return true; } return false; }catch(e){ return false; } }
+			function prevTrack(){ try{ const b=document.getElementById('btnPrev'); if(b){ b.click(); return true; } return false; }catch(e){ return false; } }
+			function routeLocal(text){
+				const t = (text||'').toLowerCase().trim();
+				if (/^(pon\s+)?play$/.test(t) || /^(reproduce|reanuda|resume|continuar)$/.test(t)){
+					if (playToggle()){ addMsg('bot','Reproduciendo.'); return true; }
+				}
+				if (/^(pausa|pausar|det[eé]n|detener|stop)$/.test(t)){
+					if (playToggle()){ addMsg('bot','Pausa.'); return true; }
+				}
+				if (/^(siguiente|pr[oó]ximo|next)$/.test(t)){
+					if (nextTrack()){ addMsg('bot','Siguiente.'); return true; }
+				}
+				if (/^(anterior|previo|previous|atr[aá]s)$/.test(t)){
+					if (prevTrack()){ addMsg('bot','Anterior.'); return true; }
+				}
+				return false;
+			}
+
+			async function sendMsg(text){
+				const msg = (text||'').trim(); if (!msg) return;
+				addMsg('user', msg);
+				input.value=''; const pending = setPending();
+				try{
+					// Try local commands first (play/pause/next/prev)
+					if (routeLocal(msg)){ clearPending(pending); return; }
+					const res = await fetch('/api/assistant/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: msg }) });
+					let data = {}; try{ data = await res.json(); }catch(_){ data = {}; }
+					clearPending(pending);
+					if (data.speech){ addMsg('bot', data.speech); speak(data.speech); }
+					else { addMsg('bot', data.error || 'Hecho.'); }
+					if (data.action === 'navigate' && data.url){ setTimeout(()=>{ window.location.href = data.url; }, 600); }
+				}catch(e){ clearPending(pending); addMsg('bot','Hubo un problema procesando tu solicitud.'); }
+			}
+
+			// Voice recognition inside modal
+			let recognizing = false; let recognition = null;
+			function ensureRecognition(){
+				const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return null;
+				if (!recognition){ const r = new SR(); r.lang='es-ES'; r.continuous=false; r.interimResults=false; r.onresult = (e)=>{ try{ const t = e.results[0][0].transcript; sendMsg(t); }catch(_){} }; r.onend=()=>{ recognizing=false; mic.classList.remove('active'); }; recognition=r; }
+				return recognition;
+			}
+			function toggleMic(){ const r = ensureRecognition(); if (!r){ speak('Tu navegador no soporta reconocimiento de voz.'); return; } if (!recognizing){ try{ r.start(); recognizing=true; mic.classList.add('active'); speak('Te escucho'); }catch(_){} } else { try{ r.stop(); recognizing=false; mic.classList.remove('active'); speak('Listo'); }catch(_){} } }
+
+			fab.addEventListener('click', ()=>{ modal.style.display = 'flex'; input.focus(); });
+			closeBtn.addEventListener('click', ()=>{ modal.style.display = 'none'; });
+			send.addEventListener('click', ()=> sendMsg(input.value));
+			input.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ e.preventDefault(); sendMsg(input.value); }});
+			mic.addEventListener('click', toggleMic);
+		})();
+	</script>
+</body>
+</html>

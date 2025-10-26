@@ -294,6 +294,24 @@
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
         }
 
+        .book-cover {
+            width: 100%;
+            aspect-ratio: 16/10;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            margin-bottom: var(--space-md);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.25);
+        }
+        .book-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            filter: saturate(1.05) contrast(1.02);
+        }
+
         .book-card::before {
             content: '';
             position: absolute;
@@ -547,13 +565,13 @@
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-menu">
-                <a class="sidebar-item" href="{{ url_for('index') }}">Inicio</a>
+                <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
                 <a class="sidebar-item active" href="{{ url_for('biblioteca') }}">Biblioteca</a>
-                <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Guardar Libro</a>
+                <a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+                <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+                
                 <a class="sidebar-item" href="#">Recientes</a>
-                <a class="sidebar-item" href="#">Favoritos</a>
-                <a class="sidebar-item" href="#">Quiénes somos</a>
-                <a class="sidebar-item" href="#">Ayuda</a>
+                
             </div>
         </aside>
 
@@ -628,6 +646,9 @@
                         class="filter-input" 
                         placeholder="Buscar por título o tema..."
                     >
+                    <div id="autocompleteBox" style="position:relative;">
+                        <div id="autocompleteList" style="display:none; position:absolute; left:0; right:0; background: rgba(26,13,46,0.95); border:1px solid rgba(124,58,237,0.35); border-radius: 10px; margin-top:.25rem; z-index:50; max-height:220px; overflow:auto;"></div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -644,8 +665,39 @@
                 <h3>La biblioteca está vacía</h3>
                 <p>Aún no hay libros disponibles. Los contenidos aparecerán aquí cuando se suban a la plataforma.</p>
             </div>
+
+            <!-- Recomendaciones cuando no hay coincidencia exacta -->
+            <div id="recommendationWrap" style="display:none; margin-top: var(--space-xl);">
+                <h3 style="font-size:1.4rem; margin-bottom: var(--space-md); color:#a78bfa;">Te podría interesar</h3>
+                <div id="recommendationReason" style="color: rgba(255,255,255,0.8); margin-bottom: var(--space-sm);"></div>
+                <div id="recommendationsGrid" class="books-grid"></div>
+            </div>
         </section>
     </main>
+
+    <!-- Modal gestionar capítulos -->
+    <div id="manageModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1000;">
+        <div style="max-width:700px; margin: 10vh auto; background: linear-gradient(135deg, rgba(60,31,102,.6), rgba(26,13,46,.8)); border:1px solid rgba(124,58,237,.35); border-radius:16px; padding:1rem 1.25rem;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem;">
+                <div id="manageTitle" style="font-weight:800; font-size:1.1rem;">Capítulos</div>
+                <button onclick="closeManage()" style="background:transparent; color:#fff; border:1px solid rgba(255,255,255,.2); padding:.35rem .6rem; border-radius:8px;">Cerrar</button>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr; gap:.75rem;">
+                <div>
+                    <div style="font-weight:700; color:#a78bfa; margin-bottom:.25rem;">Lista de capítulos</div>
+                    <ul id="chaptersUl" style="list-style:none; padding:0; margin:0;"></ul>
+                </div>
+                <div>
+                    <div style="font-weight:700; color:#a78bfa; margin-bottom:.25rem;">Agregar existente como capítulo</div>
+                    <select id="candidateSelect" class="filter-select" style="margin-bottom:.35rem; width:100%;"></select>
+                    <input id="candidateChapterTitle" class="filter-input" placeholder="Título de capítulo (opcional)" />
+                    <div style="margin-top:.5rem;">
+                        <button class="book-action" onclick="attachSelected()">Agregar como capítulo</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script>
         // Datos de libros - Se cargarán desde MongoDB
@@ -659,7 +711,31 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    booksData = data.libros || [];
+                    const all = data.libros || [];
+                    // Mapear conteo y duración total por libro padre
+                    const countByParent = {};
+                    const durByParent = {};
+                    const sec = (x)=>{ const n = parseInt(x||0,10); return isNaN(n)?0:n; };
+                    // Sumar duración del propio libro padre también
+                    all.forEach(b => {
+                        if (b.is_chapter && b.parent_id){
+                            const pid = String(b.parent_id);
+                            countByParent[pid] = (countByParent[pid]||0)+1;
+                            durByParent[pid] = (durByParent[pid]||0) + sec(b.duration_seconds);
+                        }
+                    });
+                    // Filtrar solo libros raíz
+                    booksData = all.filter(b => !b.is_chapter).map(b => {
+                        const pid = String(b._id);
+                        // total = duración padre + suma capítulos
+                        const totalSec = sec(b.duration_seconds) + (durByParent[pid]||0);
+                        return {
+                            ...b,
+                            _chaptersCount: countByParent[pid]||0,
+                            _aggDurSeconds: totalSec,
+                            _aggDurLabel: formatDuration(totalSec)
+                        };
+                    });
                     filteredBooks = [...booksData];
                     renderBooks(filteredBooks);
                     console.log(`📚 Cargados ${booksData.length} libros desde la base de datos`);
@@ -671,22 +747,19 @@
             }
         }
 
-        // Función para renderizar libros
-        function renderBooks(books) {
-            const booksGrid = document.getElementById('booksGrid');
-            const emptyState = document.getElementById('emptyState');
+        function formatDuration(duration_seconds){
+            const s = parseInt(duration_seconds||0,10)||0;
+            if (s <= 0) return 'Duración no disponible';
+            if (s < 60) return `${s} seg`;
+            if (s < 3600){ const m=Math.floor(s/60), ss=s%60; return ss>0?`${m} min ${ss} seg`:`${m} min`; }
+            const h = Math.floor(s/3600), m = Math.floor((s%3600)/60); return m>0?`${h}h ${m}min`:`${h}h`;
+        }
 
-            if (books.length === 0) {
-                booksGrid.style.display = 'none';
-                emptyState.style.display = 'block';
-                return;
-            }
-
-            booksGrid.style.display = 'grid';
-            emptyState.style.display = 'none';
-
-            booksGrid.innerHTML = books.map(book => `
-                <div class="book-card" onclick="openBook(${book.id})">
+        // Helper: plantilla de tarjeta
+        function buildBookCard(book){
+            return `
+                <div class="book-card" onclick="openBook('${book._id}')">
+                    ${book.cover_image_url ? `<div class="book-cover"><img src="${book.cover_image_url}" alt="Portada de ${book.title?.replace(/['` + "\\" + `]/g,'') || 'libro'}" loading="lazy"/></div>` : ''}
                     <span class="book-category">${book.categoryLabel}</span>
                     <h3 class="book-title">${book.title}</h3>
                     <p class="book-subtitle">${book.subtitle}</p>
@@ -697,51 +770,257 @@
                         </div>
                         <div class="book-duration">
                             <span>⏱️</span>
-                            <span>${book.duration}</span>
+                            <span>${book._aggDurLabel || book.duration}</span>
                         </div>
                     </div>
-                    <button class="book-action" onclick="event.stopPropagation(); accessBook(${book.id})">
-                        <span style="position: relative; z-index: 1;">Acceder al Contenido</span>
-                    </button>
+                    ${book._chaptersCount ? `<div style="margin-top:.5rem; opacity:.85;">📖 ${book._chaptersCount} capítulo${book._chaptersCount===1?'':'s'}</div>` : ''}
+                    <div style="display:flex; gap:.5rem; margin-top: .75rem; flex-wrap: wrap;">
+                        <button class="book-action" onclick="event.stopPropagation(); accessBook('${book._id}')">
+                            <span style="position: relative; z-index: 1;">Acceder</span>
+                        </button>
+                        <button class="book-action" style="background:#0ea5e9; border-color:#0ea5e9;" onclick="event.stopPropagation(); openManageChapters('${book._id}', '${book.title?.replace(/['`\\]/g,'') || ''}')">
+                            <span style="position: relative; z-index: 1;">Gestionar capítulos</span>
+                        </button>
+                        <button class="book-action" style="background:#ef4444; border-color:#ef4444;" onclick="event.stopPropagation(); confirmDelete('${book._id}', '${book.title?.replace(/['`\\]/g,'') || ''}')">
+                            <span style="position: relative; z-index: 1;">Eliminar</span>
+                        </button>
+                    </div>
                 </div>
-            `).join('');
+            `;
+        }
+
+        // Función para renderizar libros en el grid principal
+        function renderBooks(books) {
+            const booksGrid = document.getElementById('booksGrid');
+            const emptyState = document.getElementById('emptyState');
+            const recWrap = document.getElementById('recommendationWrap');
+
+            if (books.length === 0) {
+                booksGrid.style.display = 'none';
+                // Si no hay libros por mostrar aquí, pero podría haber recomendaciones, dejamos control a quien llame
+                if (recWrap && recWrap.style.display === 'block') {
+                    emptyState.style.display = 'none';
+                } else {
+                    emptyState.style.display = 'block';
+                }
+                return;
+            }
+
+            booksGrid.style.display = 'grid';
+            emptyState.style.display = 'none';
+            booksGrid.innerHTML = books.map(buildBookCard).join('');
+        }
+
+        // Render recomendaciones
+        function renderRecommendations(list, reasonText){
+            const recWrap = document.getElementById('recommendationWrap');
+            const recGrid = document.getElementById('recommendationsGrid');
+            const reason = document.getElementById('recommendationReason');
+            const emptyState = document.getElementById('emptyState');
+
+            if (!list || list.length === 0) {
+                recWrap.style.display = 'none';
+                emptyState.style.display = 'block';
+                return;
+            }
+            reason.textContent = reasonText || '';
+            recGrid.innerHTML = list.map(buildBookCard).join('');
+            recWrap.style.display = 'block';
+            emptyState.style.display = 'none';
+        }
+
+        // Eliminar libro
+        async function deleteBook(id){
+            try{
+                const res = await fetch(`/api/libros/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if(!res.ok){
+                    alert(`No se pudo eliminar: ${data.error || res.status}`);
+                    return;
+                }
+                // Recargar lista
+                await loadBooks();
+            }catch(e){
+                alert('Error de red al eliminar');
+            }
+        }
+
+        function confirmDelete(id, title){
+            const name = title || 'este libro';
+            if (confirm(`¿Eliminar ${name}? Si es un libro raíz, también se eliminarán sus capítulos.`)){
+                deleteBook(id);
+            }
+        }
+
+        // Gestionar capítulos (modal simple)
+        let manageState = { bookId: null, title: '' };
+        function openManageChapters(bookId, title){
+            manageState.bookId = bookId; manageState.title = title || '';
+            document.getElementById('manageTitle').textContent = `Capítulos de: ${manageState.title}`;
+            document.getElementById('manageModal').style.display = 'block';
+            loadChaptersFor(bookId);
+            loadCandidates(bookId);
+        }
+        function closeManage(){
+            document.getElementById('manageModal').style.display = 'none';
+            manageState = { bookId: null, title: '' };
+        }
+        async function loadChaptersFor(bookId){
+            const list = document.getElementById('chaptersUl');
+            list.innerHTML = '<li style="opacity:.8;">Cargando...</li>';
+            try{
+                const r = await fetch(`/api/libros/${bookId}/chapters`);
+                const data = await r.json();
+                const chs = data.chapters || [];
+                if (!chs.length){ list.innerHTML = '<li style="opacity:.8;">Sin capítulos</li>'; return; }
+                list.innerHTML = chs.map(c=>`<li style="padding:.35rem 0; display:flex; justify-content:space-between; gap:.5rem;"><span>${c.chapter_roman? (c.chapter_roman+' — '):''}${c.title}</span><span style="opacity:.75; font-size:.9rem;">${c.duration||''}</span></li>`).join('');
+            }catch(e){ list.innerHTML = '<li style="opacity:.8;">Error al cargar</li>'; }
+        }
+        async function loadCandidates(bookId){
+            const sel = document.getElementById('candidateSelect');
+            sel.innerHTML = '<option value="">Cargando…</option>';
+            try{
+                const r = await fetch('/api/libros');
+                const data = await r.json();
+                const all = data.libros || [];
+                // candidatos: libros raíz distintos del padre
+                const opts = all.filter(b => !b.is_chapter && String(b._id) !== String(bookId));
+                if (!opts.length){ sel.innerHTML = '<option value="">No hay candidatos</option>'; return; }
+                sel.innerHTML = '<option value="">Selecciona libro a convertir en capítulo…</option>' + opts.map(b=>`<option value="${b._id}">${(b.title||'Sin título')}</option>`).join('');
+            }catch(e){ sel.innerHTML = '<option value="">Error</option>'; }
+        }
+        async function attachSelected(){
+            const sel = document.getElementById('candidateSelect');
+            const cid = sel.value;
+            const chapTitle = (document.getElementById('candidateChapterTitle').value||'').trim();
+            if (!manageState.bookId){ alert('Libro padre no definido'); return; }
+            if (!cid){ alert('Selecciona un libro para convertir en capítulo'); return; }
+            try{
+                const res = await fetch(`/api/libros/${cid}/reparent`, {
+                    method: 'POST', headers: { 'Content-Type':'application/json' },
+                    body: JSON.stringify({ parentBookId: manageState.bookId, keepTitle: false, chapterTitle: chapTitle })
+                });
+                const data = await res.json();
+                if (!res.ok){ alert('No se pudo convertir: ' + (data.error||res.status)); return; }
+                // Recargar capítulos y lista de biblioteca
+                await loadChaptersFor(manageState.bookId);
+                await loadBooks();
+                alert('Capítulo agregado');
+                document.getElementById('candidateChapterTitle').value='';
+                sel.value='';
+            }catch(e){ alert('Error de red'); }
+        }
+
+        // Helpers de búsqueda
+        const norm = (s) => (s || '').toString().trim().toLowerCase();
+        function topCategory(books){
+            const counts = {};
+            books.forEach(b => { counts[b.category] = (counts[b.category]||0)+1; });
+            let best = null, bestC = -1;
+            Object.keys(counts).forEach(k => { if (counts[k] > bestC){ best = k; bestC = counts[k]; }});
+            return best;
         }
 
         // Función para filtrar libros
         function filterBooks() {
-            const categoryFilter = document.getElementById('categoryFilter').value.toLowerCase();
-            const levelFilter = document.getElementById('levelFilter').value.toLowerCase();
-            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const categoryFilter = norm(document.getElementById('categoryFilter').value);
+            const levelFilter = norm(document.getElementById('levelFilter').value);
+            const searchQuery = norm(document.getElementById('searchInput').value);
 
+            const booksGrid = document.getElementById('booksGrid');
+            const emptyState = document.getElementById('emptyState');
+            const recWrap = document.getElementById('recommendationWrap');
+
+            // Reset recomendaciones por defecto
+            recWrap.style.display = 'none';
+
+            if (searchQuery) {
+                // 1) Coincidencia exacta por título
+                const exactMatches = booksData.filter(b => norm(b.title) === searchQuery);
+
+                if (exactMatches.length > 0) {
+                    renderBooks(exactMatches);
+                    return;
+                }
+
+                // 2) Sin exactos: sugerencias por categoría relacionada
+                // a) si hay categoría seleccionada, usamos esa
+                let targetCategory = categoryFilter || '';
+
+                // b) si no, intentamos con coincidencias parciales para inferir categoría
+                if (!targetCategory) {
+                    const partials = booksData.filter(b => {
+                        const t = norm(b.title);
+                        const s = norm(b.subtitle);
+                        return t.includes(searchQuery) || s.includes(searchQuery);
+                    });
+                    targetCategory = topCategory(partials) || '';
+                }
+
+                // c) si aún no, tomamos categoría más frecuente en toda la librería
+                if (!targetCategory) {
+                    targetCategory = topCategory(booksData) || '';
+                }
+
+                const recos = booksData.filter(b => b.category === targetCategory).slice(0, 8);
+
+                // Ocultamos el grid principal y mostramos recomendaciones
+                booksGrid.style.display = 'none';
+                emptyState.style.display = 'none';
+                const catLabel = (recos[0] && recos[0].categoryLabel) ? recos[0].categoryLabel : 'tu interés';
+                renderRecommendations(recos, `No se encontró "${searchQuery}". Sugerencias de la categoría ${catLabel}:`);
+                return;
+            }
+
+            // Sin búsqueda: aplicar filtros tradicionales
             filteredBooks = booksData.filter(book => {
                 const matchesCategory = !categoryFilter || book.category === categoryFilter;
                 const matchesLevel = !levelFilter || book.level === levelFilter;
-                const matchesSearch = !searchQuery || 
-                    book.title.toLowerCase().includes(searchQuery) || 
-                    book.subtitle.toLowerCase().includes(searchQuery);
-
-                return matchesCategory && matchesLevel && matchesSearch;
+                return matchesCategory && matchesLevel;
             });
-
             renderBooks(filteredBooks);
         }
 
         // Event listeners para filtros
         document.getElementById('categoryFilter').addEventListener('change', filterBooks);
         document.getElementById('levelFilter').addEventListener('change', filterBooks);
-        document.getElementById('searchInput').addEventListener('input', filterBooks);
+        const searchEl = document.getElementById('searchInput');
+        const acList = document.getElementById('autocompleteList');
+        async function updateAutocomplete(){
+            const q = (searchEl.value||'').trim();
+            if (!q){ acList.style.display='none'; return; }
+            try{
+                const r = await fetch('/api/autocomplete?q=' + encodeURIComponent(q));
+                const data = await r.json();
+                const arr = data.suggestions || [];
+                if (!arr.length){ acList.style.display='none'; return; }
+                acList.innerHTML = arr.map(s=>`<div class="ac-item" data-val="${s.replace(/"/g,'&quot;')}">${s}</div>`).join('');
+                acList.style.display='block';
+            }catch(e){ acList.style.display='none'; }
+        }
+        acList.addEventListener('click', (e)=>{
+            const item = e.target.closest('.ac-item');
+            if (!item) return;
+            const val = item.getAttribute('data-val')||'';
+            searchEl.value = val;
+            acList.style.display='none';
+            filterBooks();
+        });
+        document.addEventListener('click', (e)=>{
+            if (!acList.contains(e.target) && e.target!==searchEl) acList.style.display='none';
+        });
+        searchEl.addEventListener('input', ()=>{ filterBooks(); updateAutocomplete(); });
+        searchEl.addEventListener('focus', updateAutocomplete);
 
         // Funciones para interacción con libros
         function openBook(bookId) {
-            console.log('Abriendo libro:', bookId);
-            // Aquí se implementará la lógica para abrir el libro
+            if (!bookId) return;
+            window.location.href = `/reproductor/${bookId}`;
         }
 
         function accessBook(bookId) {
-            const book = booksData.find(b => b.id === bookId);
-            if (book) {
-                alert(`Accediendo a: ${book.title}\n\nEsta funcionalidad se conectará con el sistema de lectura y TTS.`);
-            }
+            if (!bookId) return;
+            window.location.href = `/reproductor/${bookId}`;
         }
 
         // Cargar libros al iniciar la página
