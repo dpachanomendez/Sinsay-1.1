@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recientes - SinSay</title>
+  <style>
+    :root{
+      --primary-purple:#7c3aed; --bg-dark:#1a0d2e; --border:rgba(124,58,237,.3); --card:rgba(124,58,237,.1); --text:#e5e7eb;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Ubuntu,sans-serif;background:linear-gradient(135deg,#1a0d2e,#3c1f66);color:var(--text);min-height:100vh}
+    .navbar{position:fixed;left:0;right:0;top:0;z-index:10;background:rgba(26,13,46,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;padding:1rem 2rem}
+    .navbar-title{font-size:1.5rem;font-weight:800;background:linear-gradient(45deg,#a78bfa,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .navbar-logout-btn{background:var(--primary-purple);color:#fff;padding:.5rem 1.25rem;border-radius:10px;text-decoration:none}
+
+    .layout{display:flex;margin-top:60px}
+    .sidebar{width:220px;position:fixed;left:0;top:60px;bottom:0;background:rgba(26,13,46,.6);backdrop-filter:blur(10px);border-right:1px solid var(--border);padding:1rem 0;overflow:auto}
+    .sidebar-item{display:block;color:var(--text);text-decoration:none;padding:.75rem 1.25rem;border-left:3px solid transparent}
+    .sidebar-item:hover,.sidebar-item.active{background:var(--card);border-left-color:var(--primary-purple);color:#fff}
+
+    .page{margin-left:220px;max-width:1200px;padding:1.5rem 1.25rem}
+
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+  .h-left{display:flex;gap:.75rem;align-items:center}
+  .h-badge{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(124,58,237,.3),rgba(236,72,153,.25));border:1px solid var(--border)}
+  .h-left h2{font-size:1.8rem;font-weight:800;background:linear-gradient(135deg,#fff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  .h-sub{opacity:.85;margin-top:.15rem}
+
+  .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin:1rem 0}
+  @media (max-width:1100px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media (max-width:600px){.stats{grid-template-columns:1fr}}
+  .stat{border:1px solid var(--border);border-radius:16px;padding:1rem;position:relative;overflow:hidden}
+  .stat.g1{background:linear-gradient(135deg,rgba(2,132,199,.25),rgba(15,23,42,.25))}
+  .stat.g2{background:linear-gradient(135deg,rgba(5,150,105,.25),rgba(15,23,42,.25))}
+  .stat.g3{background:linear-gradient(135deg,rgba(88,28,135,.35),rgba(15,23,42,.25))}
+  .stat.g4{background:linear-gradient(135deg,rgba(180,83,9,.28),rgba(15,23,42,.25))}
+  .s-label{font-size:.95rem;color:rgba(255,255,255,.85)}
+  .s-value{font-size:1.6rem;font-weight:800;margin-top:.4rem}
+
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+    @media (max-width:1100px){.grid{grid-template-columns:repeat(3,1fr)}}
+    @media (max-width:800px){.grid{grid-template-columns:repeat(2,1fr)}.sidebar{display:none}.page{margin-left:0}}
+    @media (max-width:520px){.grid{grid-template-columns:1fr}}
+
+  .card{background:linear-gradient(135deg,rgba(60,31,102,.35),rgba(26,13,46,.55));border:1px solid rgba(255,255,255,.12);border-radius:18px;overflow:hidden;transition:transform .25s ease, box-shadow .25s ease, border-color .25s ease}
+  .card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,.2);box-shadow:0 18px 40px rgba(0,0,0,.35)}
+  .cover{position:relative;aspect-ratio:1/1;overflow:hidden}
+    .cover img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s}
+  .card:hover .cover img{transform:scale(1.06)}
+  .badge{position:absolute;top:.6rem;left:.6rem;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);padding:.3rem .6rem;border-radius:9999px;font-size:.75rem;font-weight:800}
+  .badgeR{position:absolute;top:.6rem;right:.6rem;background:linear-gradient(135deg,rgba(124,58,237,.85),rgba(236,72,153,.85));padding:.3rem .6rem;border-radius:9999px;font-size:.75rem;font-weight:800;border:1px solid rgba(255,255,255,.25)}
+  .play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;background:linear-gradient(135deg,rgba(0,0,0,.1),rgba(0,0,0,.45));transition:.25s}
+    .card:hover .play{opacity:1}
+  .play a{width:58px;height:58px;border-radius:9999px;background:#fff;color:#000;display:flex;align-items:center;justify-content:center;text-decoration:none;font-weight:900;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+
+    .info{padding:.75rem}
+    .title{font-weight:800;margin-bottom:.15rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .sub{opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .meta{display:flex;align-items:center;justify-content:space-between;margin-top:.5rem;font-size:.85rem;opacity:.9}
+  .meta .time{display:flex;gap:.35rem;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.08);padding:.3rem .55rem;border-radius:999px;border:1px solid rgba(255,255,255,.12)}
+  .prog{height:7px;border-radius:9999px;background:rgba(255,255,255,.14);overflow:hidden;margin-top:.6rem;border:1px solid rgba(255,255,255,.1)}
+  .prog>span{display:block;height:100%;background:linear-gradient(90deg,#7c3aed,#ec4899);width:0%}
+
+    .empty{opacity:.8;border:1px dashed rgba(255,255,255,.2);padding:1rem;border-radius:14px;text-align:center}
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="navbar-title">SinSay</div>
+    <a class="navbar-logout-btn" href="{{ url_for('logout') }}">Cerrar sesión</a>
+  </nav>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
+      <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
+      <a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+      <a class="sidebar-item active" href="{{ url_for('recientes') }}">Recientes</a>
+      <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+      <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Subir Libro</a>
+    </aside>
+
+    <main class="page">
+      <div class="header">
+        <div>
+          <div class="h-left">
+            <div class="h-badge">⏱️</div>
+            <h2>Escuchados Recientemente</h2>
+          </div>
+          <div class="h-sub">Continúa donde lo dejaste. Mostrando reproducciones de las últimas 24 horas.</div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat g1"><div class="s-label">Total escuchados</div><div class="s-value">{{ total }}</div></div>
+        <div class="stat g2"><div class="s-label">Completados</div><div class="s-value">{{ completed }}</div></div>
+        <div class="stat g3"><div class="s-label">En progreso</div><div class="s-value">{{ in_progress }}</div></div>
+        <div class="stat g4"><div class="s-label">Hoy</div><div class="s-value">{{ today_count }}</div></div>
+      </div>
+
+      {% if not recientes or recientes|length == 0 %}
+        <div class="empty">No hay reproducciones en las últimas 24 horas.</div>
+      {% else %}
+        <div class="grid" id="grid">
+          {% for b in recientes %}
+          <div class="card">
+            <div class="cover">
+              {% if b.cover_image_url %}
+                <img src="{{ b.cover_image_url }}" alt="{{ b.title }}">
+              {% else %}
+                <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg, rgba(124,58,237,.25), rgba(236,72,153,.25));font-weight:800;">
+                  {{ b.categoryLabel or 'Libro' }}
+                </div>
+              {% endif %}
+              {% if b.progress %}<div class="badge">{{ b.progress }}%</div>{% endif %}
+              {% if b.categoryLabel %}<div class="badgeR">{{ b.categoryLabel }}</div>{% endif %}
+              <div class="play"><a href="{{ url_for('reproductor', book_id=b._id) }}" title="Reproducir">▶</a></div>
+            </div>
+            <div class="info">
+              <div class="title" title="{{ b.title }}">{{ b.title }}</div>
+              {% if b.subtitle %}<div class="sub" title="{{ b.subtitle }}">{{ b.subtitle }}</div>{% endif %}
+              <div class="prog"><span data-progress="{{ (b.progress or 0)|int }}"></span></div>
+              <div class="meta">
+                <span class="pill">⏱️ {{ b.duration or '—' }}</span>
+                <span class="time"><span>🕒</span><span data-ts="{{ b.last_played_at.timestamp() if b.last_played_at else '' }}" class="relts">—</span></span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </main>
+  </div>
+
+  <script>
+    // Formato relativo de "hace X"
+    (function(){
+      function rel(t){
+        if(!t) return '—';
+        var secs = Math.max(1, Math.floor(Date.now()/1000 - t));
+        if (secs < 60) return 'hace ' + secs + 's';
+        var mins = Math.floor(secs/60); if (mins < 60) return 'hace ' + mins + 'm';
+        var hrs = Math.floor(mins/60); if (hrs < 24) return 'hace ' + hrs + 'h';
+        var d = Math.floor(hrs/24); return 'hace ' + d + 'd';
+      }
+      function apply(){
+        document.querySelectorAll('.relts').forEach(function(el){ var v = parseFloat(el.getAttribute('data-ts')||''); el.textContent = rel(v); });
+        document.querySelectorAll('.prog > span[data-progress]').forEach(function(el){
+          var p = parseInt(el.getAttribute('data-progress')||'0', 10);
+          if (isNaN(p) || p < 0) p = 0; if (p > 100) p = 100;
+          el.style.width = p + '%';
+        });
+      }
+      apply(); setInterval(apply, 60000);
+    })();
+  </script>
+</body>
+</html>

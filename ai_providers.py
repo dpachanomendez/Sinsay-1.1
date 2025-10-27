@@ -12,8 +12,10 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 def _get_gemini_client():
-    """Return a google-genai client if available and keyed, else None."""
-    api_key = os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")
+    """Return a google-genai client if available and keyed, else None.
+    Prefer GEMINI_API_KEY to avoid conflicts with other Google APIs (e.g., Cloud TTS).
+    """
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         return None
     try:
@@ -88,7 +90,38 @@ def summarize_text(text: str, max_tokens: int = 120) -> Optional[str]:
         except Exception:
             pass
 
-    return None
+    # 3) Fallback: simple heuristic summary (no external AI required)
+    try:
+        import re
+        # Normalize whitespace
+        raw = re.sub(r"\s+", " ", text).strip()
+        # Split into sentences
+        sents = re.split(r"(?<=[.!?¡¿])\s+", raw)
+        sents = [s.strip() for s in sents if s and len(s.strip()) > 2]
+        if not sents:
+            return raw[:300]
+        # If very short, just return it
+        if len(raw) <= 300:
+            return raw
+        # Pick 3 representative sentences: first, middle, last
+        picks = []
+        picks.append(sents[0])
+        if len(sents) >= 3:
+            picks.append(sents[len(sents)//2])
+            picks.append(sents[-1])
+        elif len(sents) == 2:
+            picks.append(sents[1])
+        # Join and trim to a compact length
+        out = ' '.join(picks).strip()
+        if len(out) > 600:
+            out = out[:600].rsplit(' ', 1)[0] + '…'
+        return out
+    except Exception:
+        # Last resort: truncate beginning of text
+        try:
+            return (text[:600] + ('…' if len(text) > 600 else ''))
+        except Exception:
+            return None
 
 
 def analyze_content(text: str) -> Optional[dict]:
@@ -320,13 +353,28 @@ def generate_quiz(text: str, n: int = 5) -> Optional[List[Dict[str, str]]]:
 
 
 def generate_notes(text: str) -> Optional[List[str]]:
-    """Generate bullet notes from text; fallback to simple split."""
+    """
+    Genera notas de estudio orientadas al aprendizaje:
+    - 3-5 puntos clave (prefijo "Punto:")
+    - 2-3 preguntas educativas (prefijo "Pregunta:")
+    Usa Gemini/OpenAI si están disponibles; de lo contrario, heurística local.
+    Devuelve lista de strings (viñetas).
+    """
     if not text:
         return None
+
+    # 1) Gemini (preferido)
     client = _get_gemini_client()
     if client is not None:
         try:
-            prompt = "Extrae 5-7 puntos clave en viñetas, en español, concisos y claros:\n\n" + text[:8000]
+            prompt = (
+                "Eres un tutor. Devuelve una lista en viñetas (una por línea) con 5-7 elementos en español.\n"
+                "Incluye: 3-5 puntos clave y 2-3 preguntas educativas de comprensión o aplicación.\n"
+                "Formato exacto por línea:\n"
+                "- Punto: <idea breve y concreta>\n"
+                "- Pregunta: <pregunta enfocada y útil>\n\n"
+                "Sé específico, claro y evita redundancias. Texto:\n\n" + text[:8000]
+            )
             resp = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
             out = None
             try:
@@ -334,25 +382,75 @@ def generate_notes(text: str) -> Optional[List[str]]:
             except Exception:
                 out = getattr(resp, "text", None)
             if out:
-                bullets = [l.strip('-• ').strip() for l in out.split('\n') if l.strip()]
-                return bullets[:7]
+                lines = [l.strip() for l in out.split('\n') if l.strip()]
+                # normalizar viñetas
+                bullets = []
+                for l in lines:
+                    l = l.lstrip('-• ').strip()
+                    bullets.append(l)
+                # recortar a 7
+                return bullets[:7] if bullets else None
         except Exception:
             pass
+
+    # 2) OpenAI como alternativa
     openai = _get_openai_client()
     if openai is not None:
         try:
             r = openai.chat.completions.create(
                 model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
-                messages=[{"role":"system","content":"Devuelve 5-7 viñetas concisas en español."},
-                         {"role":"user","content":text[:8000]}],
+                messages=[
+                    {"role":"system","content":(
+                        "Eres un tutor. Devuelve 5-7 líneas. Cada línea debe ser una viñeta con el formato: "
+                        "'Punto: ...' (ideas) o 'Pregunta: ...' (comprensión). Español, concreto, útil."
+                    )},
+                    {"role":"user","content":text[:8000]},
+                ],
                 temperature=0.4,
             )
-            txt = r.choices[0].message.content or ''
-            return [l.strip('-• ').strip() for l in txt.split('\n') if l.strip()][:7]
+            txt = (r.choices[0].message.content or '')
+            lines = [l.strip() for l in txt.split('\n') if l.strip()]
+            bullets = [l.lstrip('-• ').strip() for l in lines]
+            return bullets[:7] if bullets else None
         except Exception:
             pass
-    # Fallback
-    return [text[:120] + ('...' if len(text)>120 else '')]
+
+    # 3) Fallback local (sin IA)
+    try:
+        import re
+        # Normalizar y segmentar oraciones
+        clean = re.sub(r"\s+", " ", text).strip()
+        sents = re.split(r"(?<=[.!?¡¿])\s+", clean)
+        sents = [s.strip() for s in sents if s and len(s.strip()) > 30]
+        # Palabras clave de instrucción para priorizar oraciones útiles
+        keywords = [
+            "definición", "objetivo", "importancia", "clave", "resultado", "evidencia",
+            "causa", "efecto", "consecuencia", "ejemplo", "proceso", "paso", "beneficio",
+        ]
+        def score(sent: str) -> int:
+            sc = 0
+            low = sent.lower()
+            for k in keywords:
+                if k in low:
+                    sc += 2
+            # favorecer oraciones de longitud media
+            ln = len(sent)
+            if 60 <= ln <= 220:
+                sc += 2
+            return sc
+        ranked = sorted(sents, key=score, reverse=True)
+        points = [f"Punto: {s}" for s in ranked[:4]]
+        # Preguntas heurísticas
+        questions = [
+            "Pregunta: ¿Cuál es la idea principal del texto?",
+            "Pregunta: ¿Qué causas, efectos o evidencias se mencionan?",
+            "Pregunta: ¿Cómo podrías aplicar este contenido en una situación real?",
+        ]
+        bullets = (points + questions)[:7]
+        return bullets or [clean[:120] + ('…' if len(clean) > 120 else '')]
+    except Exception:
+        # Último recurso
+        return [text[:200] + ('…' if len(text) > 200 else '')]
 
 
 def _heuristic_complexity_metrics(text: str) -> Tuple[float, float]:

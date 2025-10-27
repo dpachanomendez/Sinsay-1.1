@@ -1,11 +1,20 @@
-from flask import Flask, render_template, request, redirect, session, url_for, jsonify, send_from_directory
-from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, session, url_for, jsonify, send_from_directory, send_file
+try:
+    from dotenv import load_dotenv  # type: ignore
+except Exception:
+    # Fallback no-op if python-dotenv is not installed, so the app still starts
+    def load_dotenv(*args, **kwargs):  # type: ignore
+        return False
 from flask_bcrypt import Bcrypt
 from pymongo import MongoClient
 from werkzeug.utils import secure_filename
 import os
 import time
 import re
+import io
+import unicodedata
+import math
+from datetime import datetime, timedelta
 ELEVEN_AVAILABLE = False
 ELEVEN_USE_LEGACY = False
 try:
@@ -482,8 +491,8 @@ def descubrir():
         return redirect(url_for('login'))
     return render_template('Descubrir.html')
 
-# Ruta deshabilitada: página de subir_libro retirada en favor del flujo central en Reproductor
-# @app.route('/subir_libro', methods=['GET', 'POST'])
+# Ruta habilitada: página para subir libros manualmente
+@app.route('/subir_libro', methods=['GET', 'POST'])
 def subir_libro():
     if 'usuario_id' not in session:
         return redirect(url_for('login'))
@@ -729,6 +738,19 @@ def reproductor(book_id):
         if not libro:
             return redirect(url_for('biblioteca'))
 
+        # Registrar última reproducción para "Recientes"
+        try:
+            now = datetime.utcnow()
+            libros_collection.update_one({'_id': ObjectId(book_id)}, {
+                '$set': {
+                    'last_played_at': now,
+                    'last_played_by': str(session.get('usuario_id', ''))
+                },
+                '$inc': { 'play_count': 1 }
+            })
+        except Exception as _e:
+            print(f"⚠️  No se pudo registrar last_played_at: {_e}")
+
         # Convertir _id para evitar problemas en la plantilla y asegurar campos esperados
         libro['_id'] = str(libro['_id'])
         return render_template('reproductor.html', libro=libro)
@@ -743,6 +765,101 @@ def reproductor_root():
         return redirect(url_for('login'))
     # Renderiza la misma plantilla sin 'libro' para que muestre un estado vacío y la lista de libros en el sidebar
     return render_template('reproductor.html', libro=None)
+
+@app.route('/api/playback/event', methods=['POST'])
+def api_playback_event():
+    """Registra eventos de reproducción para calcular progreso y finalización.
+    Body JSON: { book_id, event: 'start'|'progress'|'ended', position?: sec, duration?: sec }
+    """
+    try:
+        if libros_collection is None:
+            return jsonify({'ok': False, 'error': 'DB unavailable'}), 503
+        data = request.get_json(force=True, silent=True) or {}
+        book_id = (data.get('book_id') or '').strip()
+        event = (data.get('event') or '').strip().lower()
+        if not book_id or event not in ('start','progress','ended'):
+            return jsonify({'ok': False, 'error': 'invalid-payload'}), 400
+        position = float(data.get('position') or 0)
+        duration = float(data.get('duration') or 0)
+        now = datetime.utcnow()
+        updates = {
+            '$set': {
+                'last_played_at': now,
+                'last_played_by': str(session.get('usuario_id', '')),
+            },
+            '$inc': { 'play_count': 1 } if event == 'start' else {}
+        }
+        # calcular progreso si hay duración > 0
+        prog = None
+        if duration and duration > 0:
+            p = int(max(0, min(100, round((position / duration) * 100))))
+            prog = p
+            updates['$set']['progress'] = p
+            updates['$set']['last_position_sec'] = int(max(0, round(position)))
+            updates['$set']['duration_seconds'] = int(max(0, round(duration)))
+        if event == 'ended':
+            updates['$set']['progress'] = 100
+            updates['$set']['completed_at'] = now
+        # limpiar inc vacío
+        if not updates['$inc']:
+            updates.pop('$inc', None)
+        libros_collection.update_one({'_id': ObjectId(book_id)}, updates)
+        return jsonify({'ok': True, 'progress': prog if prog is not None else None})
+    except Exception as e:
+        print(f"❌ ERROR playback/event: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/recientes')
+def recientes():
+    """Lista de libros reproducidos en las últimas 24 horas."""
+    if 'usuario_id' not in session:
+        return redirect(url_for('login'))
+    try:
+        if libros_collection is None:
+            return render_template('recientes.html', recientes=[], total=0, completed=0, in_progress=0, today_count=0)
+        now = datetime.utcnow()
+        from_dt = now - timedelta(hours=24)
+        cursor = libros_collection.find({ 'last_played_at': { '$gte': from_dt } }).sort('last_played_at', -1)
+        recientes = []
+        for d in cursor:
+            d['_id'] = str(d.get('_id'))
+            # Normalizar campos usados en la UI
+            d['title'] = d.get('title') or 'Sin título'
+            d['subtitle'] = d.get('subtitle') or ''
+            d['categoryLabel'] = d.get('categoryLabel') or d.get('category') or ''
+            d['cover_image_url'] = d.get('cover_image_url') or ''
+            d['duration'] = d.get('duration') or ''
+            d['progress'] = d.get('progress') or 0
+            d['last_played_at'] = d.get('last_played_at')
+            d['completed_at'] = d.get('completed_at')
+            recientes.append(d)
+        # Métricas: total, completados, en progreso, hoy
+        today_date = now.date()
+        total = len(recientes)
+        # Completados: terminados en las últimas 24h (completed_at dentro de la ventana)
+        completed = 0
+        in_progress = 0
+        today_count = 0
+        for d in recientes:
+            prog = int(d.get('progress') or 0)
+            c_at = d.get('completed_at')
+            # completados en 24h
+            if c_at and c_at >= from_dt:
+                completed += 1
+                # hoy = completados cuya fecha es hoy
+                try:
+                    if c_at.date() == today_date:
+                        today_count += 1
+                except Exception:
+                    pass
+            else:
+                # en progreso en la ventana si no están completos
+                if 0 < prog < 100:
+                    in_progress += 1
+        return render_template('recientes.html', recientes=recientes, total=total, completed=completed, in_progress=in_progress, today_count=today_count)
+    except Exception as e:
+        print(f"❌ ERROR en /recientes: {e}")
+        return render_template('recientes.html', recientes=[], total=0, completed=0, in_progress=0, today_count=0)
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -1945,7 +2062,403 @@ def api_assistant_chat():
         print(f"❌ ERROR assistant/chat: {e}")
         return jsonify({'action': 'error', 'error': 'Error interno'}), 500
 
-# ...el resto de tu código para la conversión y reproducción de audio...
+# =====================
+#  Accesibilidad: Braille (PDF)
+# =====================
+
+def _strip_accents(s: str) -> str:
+    try:
+        nfkd = unicodedata.normalize('NFD', s)
+        return ''.join(c for c in nfkd if not unicodedata.combining(c))
+    except Exception:
+        return s
+
+def _b_bits(*dots: int) -> int:
+    v = 0
+    for d in dots:
+        if 1 <= d <= 8:
+            v |= (1 << (d - 1))
+    return v
+
+_BRAILLE_ALPHA = {
+    'a': _b_bits(1),
+    'b': _b_bits(1,2),
+    'c': _b_bits(1,4),
+    'd': _b_bits(1,4,5),
+    'e': _b_bits(1,5),
+    'f': _b_bits(1,2,4),
+    'g': _b_bits(1,2,4,5),
+    'h': _b_bits(1,2,5),
+    'i': _b_bits(2,4),
+    'j': _b_bits(2,4,5),
+    'k': _b_bits(1,3),
+    'l': _b_bits(1,2,3),
+    'm': _b_bits(1,3,4),
+    'n': _b_bits(1,3,4,5),
+    'o': _b_bits(1,3,5),
+    'p': _b_bits(1,2,3,4),
+    'q': _b_bits(1,2,3,4,5),
+    'r': _b_bits(1,2,3,5),
+    's': _b_bits(2,3,4),
+    't': _b_bits(2,3,4,5),
+    'u': _b_bits(1,3,6),
+    'v': _b_bits(1,2,3,6),
+    'w': _b_bits(2,4,5,6),
+    'x': _b_bits(1,3,4,6),
+    'y': _b_bits(1,3,4,5,6),
+    'z': _b_bits(1,3,5,6),
+}
+
+_BRAILLE_PUNCT = {
+    ',': _b_bits(2),
+    ';': _b_bits(2,3),
+    ':': _b_bits(2,5),
+    '.': _b_bits(2,5,6),
+    '!': _b_bits(2,3,5),
+    '?': _b_bits(2,6),
+    '-': _b_bits(3,6),
+    '(': _b_bits(1,2,6),
+    ')': _b_bits(3,4,5),
+    '"': _b_bits(2,3,6),
+    '\'': _b_bits(3),
+}
+
+_BRAILLE_NUMBER_SIGN = _b_bits(3,4,5,6)
+
+def _char_to_braille_bits(ch: str, in_number: bool):
+    """Convierte un char a uno o varios celdas en bits Braille (6 puntos).
+    Retorna (lista_bits, nuevo_estado_in_number).
+    - Dígitos: añade prefijo signo de número si no estamos ya en modo número.
+    - Letras: mapeo básico a-z (sin contracciones). Ignora mayúsculas y acentos (se eliminan).
+    - Puntuación y espacio: mapeo simple.
+    """
+    if ch.isdigit():
+        num_map = {
+            '1': _BRAILLE_ALPHA['a'], '2': _BRAILLE_ALPHA['b'], '3': _BRAILLE_ALPHA['c'], '4': _BRAILLE_ALPHA['d'], '5': _BRAILLE_ALPHA['e'],
+            '6': _BRAILLE_ALPHA['f'], '7': _BRAILLE_ALPHA['g'], '8': _BRAILLE_ALPHA['h'], '9': _BRAILLE_ALPHA['i'], '0': _BRAILLE_ALPHA['j'],
+        }
+        bits = []
+        if not in_number:
+            bits.append(_BRAILLE_NUMBER_SIGN)
+            in_number = True
+        bits.append(num_map[ch])
+        return bits, in_number
+    else:
+        if ch.isspace():
+            return [0], False
+        base = _strip_accents(ch.lower())
+        if base and base[0] in _BRAILLE_ALPHA:
+            return [_BRAILLE_ALPHA[base[0]]], False
+        if ch in _BRAILLE_PUNCT:
+            return [_BRAILLE_PUNCT[ch]], False
+        return [0], False
+
+
+def _generate_braille_pdf_response(text: str, title: str):
+    from reportlab.pdfgen import canvas as _canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    buf = io.BytesIO()
+    c = _canvas.Canvas(buf, pagesize=A4)
+    pw, ph = A4
+    margin = 18 * mm
+    dot_r = 0.7 * mm
+    dot_dx = 2.5 * mm
+    dot_dy = 2.5 * mm
+    cell_w = 6.0 * mm
+    cell_h = 10.0 * mm
+    col_gap = 1.5 * mm
+    row_gap = 2.0 * mm
+    usable_w = pw - 2*margin
+    usable_h = ph - 2*margin
+    cols = max(1, int(usable_w // (cell_w + col_gap)))
+    rows = max(1, int(usable_h // (cell_h + row_gap)))
+    def draw_cell(col_idx: int, row_idx: int, bits: int):
+        x0 = margin + col_idx * (cell_w + col_gap)
+        y_top = ph - margin - row_idx * (cell_h + row_gap)
+        positions = [ (0, 0), (0, -dot_dy), (0, -2*dot_dy), (dot_dx, 0), (dot_dx, -dot_dy), (dot_dx, -2*dot_dy) ]
+        for i in range(6):
+            if bits & (1 << i):
+                dx, dy = positions[i]
+                cx = x0 + dx + dot_r + 1.0
+                cy = y_top + dy - dot_r - 1.0
+                c.circle(cx, cy, dot_r, stroke=0, fill=1)
+    try:
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(margin, ph - margin + 8, f"Braille: {title[:80]}")
+    except Exception:
+        pass
+    col = 0
+    row = 0
+    in_number = False
+    for ch in text:
+        if ch == '\n':
+            col = 0
+            row += 1
+            in_number = False
+            if row >= rows:
+                c.showPage()
+                row = 0
+            continue
+        bits_list, in_number = _char_to_braille_bits(ch, in_number)
+        for bits in bits_list:
+            if col >= cols:
+                col = 0
+                row += 1
+                in_number = False
+            if row >= rows:
+                c.showPage()
+                row = 0
+            draw_cell(col, row, bits)
+            col += 1
+    c.showPage()
+    c.save()
+    buf.seek(0)
+    safe_name = re.sub(r"[^\w\- ]+", "", title).strip() or "contenido"
+    filename = f"braille_{safe_name}.pdf"
+    return send_file(buf, mimetype='application/pdf', as_attachment=True, download_name=filename)
+
+@app.route('/api/braille/pdf', methods=['POST'])
+def api_braille_pdf():
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        title = (data.get('title') or 'contenido').strip()
+        if not text:
+            return jsonify({'error': 'Texto vacío'}), 400
+        return _generate_braille_pdf_response(text, title)
+    except Exception as e:
+        print(f"❌ ERROR braille/pdf: {e}")
+        return jsonify({'error': 'No se pudo generar el PDF Braille'}), 500
+
+@app.route('/api/braille/pdf/book/<book_id>')
+def api_braille_pdf_book(book_id):
+    try:
+        if libros_collection is None:
+            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
+        if not doc:
+            return jsonify({'error': 'Libro no encontrado'}), 404
+        text = (doc.get('text') or '').strip()
+        if not text:
+            return jsonify({'error': 'Este libro no tiene texto almacenado'}), 400
+        title = (doc.get('title') or 'contenido').strip()
+        return _generate_braille_pdf_response(text, title)
+    except Exception as e:
+        print(f"❌ ERROR braille/pdf/book: {e}")
+        return jsonify({'error': 'No se pudo generar el PDF Braille del libro'}), 500
+
+# =====================
+# Braille: BRF (ASCII 7-bit, 40x25)
+# =====================
+
+def _to_brf_ascii(text: str, cols: int = 40, lines_per_page: int = 25) -> str:
+    """Convierte texto plano a un BRF ASCII 7-bit simple (grado 1 aproximado):
+    - Letras: se emiten en minúsculas (a..z)
+    - Números: prefijo '#' y mapeo 1..0 -> a..j, se mantiene modo número hasta separador
+    - Espacio y saltos: se preservan
+    - Puntuación ASCII básica: se deja pasar (.,;:!?-()"')
+    - Ajuste de línea a 'cols' y salto de página cada 'lines_per_page' líneas con form feed (\f)
+    Nota: Indicador de mayúsculas no incluido por defecto (se normaliza a minúsculas) para máxima compatibilidad.
+    """
+    digit_map = {'1':'a','2':'b','3':'c','4':'d','5':'e','6':'f','7':'g','8':'h','9':'i','0':'j'}
+    allowed_punct = set(list(".,;:!?-()\"'"))
+    out_lines = []
+    cur_line = []
+    col = 0
+    line_count = 0
+    in_number = False
+
+    def emit_char(ch: str):
+        nonlocal col, line_count, cur_line, out_lines
+        cur_line.append(ch)
+        col += 1
+        if col >= cols:
+            out_lines.append(''.join(cur_line))
+            cur_line = []
+            col = 0
+            line_count += 1
+            if line_count >= lines_per_page:
+                out_lines.append('\f')
+                line_count = 0
+
+    for ch in text:
+        if ch == '\n':
+            out_lines.append(''.join(cur_line))
+            cur_line = []
+            col = 0
+            line_count += 1
+            if line_count >= lines_per_page:
+                out_lines.append('\f')
+                line_count = 0
+            in_number = False
+            continue
+        if ch.isdigit():
+            if not in_number:
+                emit_char('#')
+                in_number = True
+            emit_char(digit_map[ch])
+            continue
+        # separadores salen del modo número
+        if ch.isspace():
+            emit_char(' ')
+            in_number = False
+            continue
+        base = _strip_accents(ch)
+        if base.isalpha():
+            # Normalizar a minúscula por compatibilidad
+            emit_char(base.lower())
+            in_number = False
+            continue
+        if ch in allowed_punct:
+            emit_char(ch)
+            in_number = False
+            continue
+        # default
+        emit_char(' ')
+        in_number = False
+
+    # flush última línea
+    if cur_line:
+        out_lines.append(''.join(cur_line))
+
+    return '\n'.join(out_lines)
+
+@app.route('/api/braille/brf', methods=['POST'])
+def api_braille_brf():
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        title = (data.get('title') or 'contenido').strip()
+        if not text:
+            return jsonify({'error': 'Texto vacío'}), 400
+        brf_text = _to_brf_ascii(text, cols=40, lines_per_page=25)
+        buf = io.BytesIO(brf_text.encode('ascii', errors='ignore'))
+        safe_name = re.sub(r"[^\w\- ]+", "", title).strip() or "contenido"
+        filename = f"braille_{safe_name}.brf"
+        return send_file(buf, mimetype='text/plain; charset=us-ascii', as_attachment=True, download_name=filename)
+    except Exception as e:
+        print(f"❌ ERROR braille/brf: {e}")
+        return jsonify({'error': 'No se pudo generar el BRF'}), 500
+
+@app.route('/api/braille/brf/book/<book_id>')
+def api_braille_brf_book(book_id):
+    try:
+        if libros_collection is None:
+            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
+        if not doc:
+            return jsonify({'error': 'Libro no encontrado'}), 404
+        text = (doc.get('text') or '').strip()
+        if not text:
+            return jsonify({'error': 'Este libro no tiene texto almacenado'}), 400
+        title = (doc.get('title') or 'contenido').strip()
+        brf_text = _to_brf_ascii(text, cols=40, lines_per_page=25)
+        buf = io.BytesIO(brf_text.encode('ascii', errors='ignore'))
+        safe_name = re.sub(r"[^\w\- ]+", "", title).strip() or "contenido"
+        filename = f"braille_{safe_name}.brf"
+        return send_file(buf, mimetype='text/plain; charset=us-ascii', as_attachment=True, download_name=filename)
+    except Exception as e:
+        print(f"❌ ERROR braille/brf/book: {e}")
+        return jsonify({'error': 'No se pudo generar el BRF del libro'}), 500
+
+# =====================
+# Braille: STL (3D)
+# =====================
+
+def _generate_stl_for_text(text: str, max_cells: int = 1200) -> str:
+    cell_w = 6.0; cell_h = 10.0; gap_x = 1.5; gap_y = 2.0
+    dot_w = 1.8; dot_d = 1.8; dot_h = 1.5; base_h = 1.0
+    margin_x = 5.0; margin_y = 5.0
+    dot_dx = 2.5; dot_dy = 2.5
+    positions = [(0.0,0.0),(0.0,-dot_dy),(0.0,-2*dot_dy),(dot_dx,0.0),(dot_dx,-dot_dy),(dot_dx,-2*dot_dy)]
+    max_cols = 24
+    col = 0; row = 0; used_cols = 0; used_rows = 1
+    cells = []
+    in_number = False; count_cells = 0
+    for ch in text:
+        if count_cells >= max_cells: break
+        if ch == '\n':
+            col = 0; row += 1; used_rows = max(used_rows, row+1); in_number = False; continue
+        bits_list, in_number = _char_to_braille_bits(ch, in_number)
+        for bits in bits_list:
+            if count_cells >= max_cells: break
+            if col >= max_cols:
+                col = 0; row += 1; used_rows = max(used_rows, row+1); in_number = False
+            cells.append((col,row,bits))
+            used_cols = max(used_cols, col+1)
+            col += 1; count_cells += 1
+    panel_w = margin_x*2 + used_cols*(cell_w+gap_x) - (gap_x if used_cols>0 else 0)
+    panel_h = margin_y*2 + used_rows*(cell_h+gap_y) - (gap_y if used_rows>0 else 0)
+    facets = []
+    def add_tri(n,v1,v2,v3): facets.append((n,v1,v2,v3))
+    def add_box(x,y,z,w,d,h):
+        x2=x+w; y2=y+d; z2=z+h
+        add_tri((0,0,1),(x,y,z2),(x2,y,z2),(x2,y2,z2)); add_tri((0,0,1),(x,y,z2),(x2,y2,z2),(x,y2,z2))
+        add_tri((0,0,-1),(x,y2,z),(x2,y2,z),(x2,y,z)); add_tri((0,0,-1),(x,y2,z),(x2,y,z),(x,y,z))
+        add_tri((0,1,0),(x,y2,z),(x2,y2,z),(x2,y2,z2)); add_tri((0,1,0),(x,y2,z),(x2,y2,z2),(x,y2,z2))
+        add_tri((0,-1,0),(x,y,z2),(x2,y,z2),(x2,y,z)); add_tri((0,-1,0),(x,y,z2),(x2,y,z),(x,y,z))
+        add_tri((1,0,0),(x2,y,z),(x2,y2,z),(x2,y2,z2)); add_tri((1,0,0),(x2,y,z),(x2,y2,z2),(x2,y,z2))
+        add_tri((-1,0,0),(x,y2,z2),(x,y2,z),(x,y,z)); add_tri((-1,0,0),(x,y2,z2),(x,y,z),(x,y,z2))
+    add_box(0.0,0.0,0.0,panel_w,panel_h,base_h)
+    for (c,r,bits) in cells:
+        x0 = margin_x + c*(cell_w+gap_x)
+        y_top = panel_h - margin_y - r*(cell_h+gap_y)
+        for i in range(6):
+            if bits & (1<<i):
+                dx,dy = positions[i]
+                cx = x0 + dx
+                cy = y_top + dy - dot_d
+                add_box(cx,cy,base_h,dot_w,dot_d,dot_h)
+    lines=["solid braille"]
+    for n,v1,v2,v3 in facets:
+        lines.append(f"  facet normal {n[0]:.6f} {n[1]:.6f} {n[2]:.6f}")
+        lines.append("    outer loop")
+        lines.append(f"      vertex {v1[0]:.6f} {v1[1]:.6f} {v1[2]:.6f}")
+        lines.append(f"      vertex {v2[0]:.6f} {v2[1]:.6f} {v2[2]:.6f}")
+        lines.append(f"      vertex {v3[0]:.6f} {v3[1]:.6f} {v3[2]:.6f}")
+        lines.append("    endloop")
+        lines.append("  endfacet")
+    lines.append("endsolid braille")
+    return "\n".join(lines)
+
+@app.route('/api/braille/stl', methods=['POST'])
+def api_braille_stl():
+    try:
+        data = request.get_json(silent=True) or {}
+        text = (data.get('text') or '').strip()
+        title = (data.get('title') or 'contenido').strip()
+        if not text:
+            return jsonify({'error': 'Texto vacío'}), 400
+        stl = _generate_stl_for_text(text)
+        buf = io.BytesIO(stl.encode('utf-8'))
+        safe_name = re.sub(r"[^\w\- ]+", "", title).strip() or "contenido"
+        filename = f"braille_{safe_name}.stl"
+        return send_file(buf, mimetype='model/stl', as_attachment=True, download_name=filename)
+    except Exception as e:
+        print(f"❌ ERROR braille/stl: {e}")
+        return jsonify({'error': 'No se pudo generar el STL'}), 500
+
+@app.route('/api/braille/stl/book/<book_id>')
+def api_braille_stl_book(book_id):
+    try:
+        if libros_collection is None:
+            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
+        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
+        if not doc:
+            return jsonify({'error': 'Libro no encontrado'}), 404
+        text = (doc.get('text') or '').strip()
+        if not text:
+            return jsonify({'error': 'Este libro no tiene texto almacenado'}), 400
+        title = (doc.get('title') or 'contenido').strip()
+        stl = _generate_stl_for_text(text)
+        buf = io.BytesIO(stl.encode('utf-8'))
+        safe_name = re.sub(r"[^\w\- ]+", "", title).strip() or "contenido"
+        filename = f"braille_{safe_name}.stl"
+        return send_file(buf, mimetype='model/stl', as_attachment=True, download_name=filename)
+    except Exception as e:
+        print(f"❌ ERROR braille/stl/book: {e}")
+        return jsonify({'error': 'No se pudo generar el STL del libro'}), 500
 
 if __name__ == '__main__':
     # En Windows puede aparecer OSError 10038 con el recargador automático del servidor de desarrollo.

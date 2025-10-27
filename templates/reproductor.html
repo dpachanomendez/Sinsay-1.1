@@ -161,7 +161,9 @@
   <a class="sidebar-item" href="{{ url_for('home') }}">Inicio</a>
         <a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
   <a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+  <a class="sidebar-item" href="{{ url_for('recientes') }}">Recientes</a>
   <a class="sidebar-item active" href="{{ url_for('reproductor_root') }}">Reproductor</a>
+  <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Subir Libro</a>
         
         <div class="quick-list">
           <div class="quick-title">Libros Guardados</div>
@@ -176,6 +178,7 @@
           <div style="display:flex; gap:.5rem;">
             <a class="icon-btn" href="#" aria-label="Compartir" title="Compartir">🔗</a>
             <a class="icon-btn" href="#" aria-label="Más" title="Más">⋮</a>
+            <button id="aiOpen" class="icon-btn" aria-label="Asistente IA" title="Asistente IA" style="font-weight:800; letter-spacing:.5px;">AI</button>
           </div>
         </div>
 
@@ -192,7 +195,9 @@
               <div class="actions-row">
                 <button class="pill-btn" type="button" id="btnLike">❤ Me gusta</button>
                 {% if libro %}<a class="pill-btn" href="{{ libro.audio_url }}" download>⬇ Descargar</a>{% endif %}
-                {% if libro %}<button class="pill-btn" id="btnSubtitles" type="button">💬 Subtítulos (beta)</button>{% endif %}
+                {% if libro %}<button class="pill-btn" id="btnBrailleBookBRF" type="button">⠿ Braille (BRF)</button>{% endif %}
+                {% if libro %}<button class="pill-btn" id="btnBrailleBookSTL" type="button">⠿ Braille (STL)</button>{% endif %}
+                {% if libro %}<button class="pill-btn" id="btnBrailleBook" type="button">⠿ Previsualización (PDF)</button>{% endif %}
                 {% if not libro %}<button class="pill-btn" id="btnRemoveAudio" type="button">🗑 Quitar este audio</button>{% endif %}
               </div>
             </div>
@@ -299,7 +304,12 @@
 
         <!-- Synced text below -->
         <div class="text-wrap" style="margin-top:1rem;">
-          <div class="text-header">Contenido sincronizado</div>
+          <div class="text-header" style="display:flex; align-items:center; justify-content:space-between; gap:.75rem;">
+            <span>Contenido sincronizado</span>
+            <button id="followToggle" type="button" style="font-size:.85rem; padding:.35rem .6rem; border-radius:10px; border:1px solid rgba(255,255,255,.16); background:rgba(255,255,255,.06); color:#fff; cursor:pointer;">
+              Seguir narración: OFF
+            </button>
+          </div>
           <div id="syncedText" class="text-content" aria-live="polite"></div>
           <div id="noText" class="no-text" style="display:none;">No hay texto disponible para este contenido. Si guardas el libro con el texto original, podrás ver el seguimiento sincronizado aquí.</div>
         </div>
@@ -310,7 +320,55 @@
       
       <!-- Libro data for synced text -->
       <script id="bookData" type="application/json">{{ (libro or {}) | tojson | safe }}</script>
+  
+  <!-- AI Floating Modal -->
+  <style>
+    .ai-modal{position:fixed;right:24px;bottom:96px;width:380px;max-width:92vw;background:rgba(26,13,46,.95);border:1px solid rgba(124,58,237,.35);backdrop-filter:blur(14px);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.45);display:none;flex-direction:column;overflow:hidden;z-index:120}
+    .ai-hd{display:flex;align-items:center;justify-content:space-between;padding:.6rem .9rem;background:linear-gradient(135deg,rgba(124,58,237,.3),rgba(168,85,247,.25));border-bottom:1px solid rgba(124,58,237,.35)}
+    .ai-ttl{font-weight:800;background:linear-gradient(135deg,#fff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+    .ai-x{background:transparent;border:0;color:#fff;opacity:.9;font-size:1rem;cursor:pointer}
+    .ai-bd{display:flex;flex-direction:column;gap:.6rem;padding:.75rem .9rem;max-height:55vh;overflow:auto}
+    .ai-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.25rem}
+    .ai-btn{padding:.55rem .85rem;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;cursor:pointer}
+    .ai-btn.ghost{background:rgba(255,255,255,.06)}
+    .ai-out{white-space:pre-wrap;line-height:1.55;color:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);padding:.6rem .7rem;border-radius:10px}
+    .ai-hint{font-size:.9rem;opacity:.8}
+  </style>
+  <div id="aiModal" class="ai-modal" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+    <div class="ai-hd"><div class="ai-ttl" id="aiTitle">Asistente IA</div><button class="ai-x" id="aiClose" aria-label="Cerrar">✕</button></div>
+    <div class="ai-bd">
+      <div class="ai-row">
+        <button id="aiDoSummary" class="ai-btn">📝 Generar resumen</button>
+        <button id="aiDoNotes" class="ai-btn ghost">📒 Notas de estudio</button>
+        <button id="aiDoQuiz" class="ai-btn ghost">❓ Preguntas de repaso</button>
+      </div>
+      <div id="aiStatus" class="ai-hint"></div>
+      <div id="aiOutput" class="ai-out" style="display:none;"></div>
+      <div class="ai-row" id="aiActions" style="display:none;">
+  <button id="aiCopy" class="ai-btn ghost">Copiar</button>
+  <button id="aiDownload" class="ai-btn ghost">Descargar .txt</button>
+  <button id="aiBrailleBRF" class="ai-btn">Braille (BRF)</button>
+  <button id="aiBrailleSTL" class="ai-btn ghost">Braille (STL)</button>
+  <button id="aiBraille" class="ai-btn ghost">Previsualización (PDF)</button>
+        <button id="aiSpeak" class="ai-btn">🔊 Leer en voz alta</button>
+        <button id="aiStop" class="ai-btn ghost">⏹ Detener lectura</button>
+      </div>
+    </div>
+  </div>
   <script>
+    // Estado global para seguir o no la narración (por defecto OFF)
+    let autoFollowNarration = false;
+    function getFollowToggle(){ return document.getElementById('followToggle'); }
+    function refreshFollowToggle(){
+      const btn = getFollowToggle(); if (!btn) return;
+      btn.textContent = 'Seguir narración: ' + (autoFollowNarration ? 'ON' : 'OFF');
+      btn.style.background = autoFollowNarration ? 'rgba(124,58,237,.35)' : 'rgba(255,255,255,.06)';
+      btn.setAttribute('aria-pressed', String(!!autoFollowNarration));
+      try{ localStorage.setItem('sinsay:autoFollow', JSON.stringify(!!autoFollowNarration)); }catch(_){ }
+    }
+    // Inicializar el estado desde almacenamiento (si existe)
+    try{ const saved = JSON.parse(localStorage.getItem('sinsay:autoFollow')||'false'); autoFollowNarration = !!saved; }catch(_){ autoFollowNarration=false; }
+    document.addEventListener('DOMContentLoaded', ()=>{ const b=getFollowToggle(); if(b){ b.addEventListener('click', ()=>{ autoFollowNarration = !autoFollowNarration; refreshFollowToggle(); }); refreshFollowToggle(); } });
     // Player + generator logic
     (function(){
       const audio = document.getElementById('audioEl');
@@ -430,15 +488,36 @@
         }catch(e){ chaptersPanel.style.display='none'; }
       }
 
+      // Reporte de progreso/completado al backend
+      function getBook(){ try{ const raw=document.getElementById('bookData')?.textContent||'{}'; return JSON.parse(raw||'{}'); }catch(_){ return {}; } }
+      let lastReportAt = 0;
+      async function reportPlayback(evt){
+        try{
+          const b = getBook(); if (!b || !b._id) return; // sólo registrar si es libro en DB
+          const now = Date.now();
+          if (evt==='progress' && (now - lastReportAt) < 15000) return; // throttle 15s
+          lastReportAt = now;
+          const body = {
+            book_id: String(b._id||''),
+            event: evt,
+            position: audio ? Math.floor(audio.currentTime||0) : 0,
+            duration: audio ? Math.floor(audio.duration||0) : 0
+          };
+          fetch('/api/playback/event', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) }).catch(()=>{});
+        }catch(_){ }
+      }
+
       if (audio) {
         audio.volume = 0.75;
-        audio.addEventListener('loadedmetadata', ()=>{ timeTot.textContent = fmt(audio.duration); });
+        audio.addEventListener('loadedmetadata', ()=>{ timeTot.textContent = fmt(audio.duration); reportPlayback('start'); });
         audio.addEventListener('timeupdate', ()=>{
           timeCur.textContent = fmt(audio.currentTime);
           progressFill.style.width = ((audio.currentTime/(audio.duration||1))*100)+'%';
+          reportPlayback('progress');
         });
         audio.addEventListener('ended', ()=>{
           btnPlay.textContent = '▶';
+          reportPlayback('ended');
           // Autoplay siguiente capítulo
           if (playlist.length > 0 && currentIndex >= 0 && currentIndex < playlist.length - 1){
             currentIndex += 1;
@@ -494,7 +573,9 @@
       const chapterTitleR = document.getElementById('chapterTitleR');
       const msg = document.getElementById('messageR');
       const btnConvert = document.getElementById('btnConvertR');
-  const btnSubtitles = document.getElementById('btnSubtitles');
+  const btnBrailleBook = document.getElementById('btnBrailleBook');
+  const btnBrailleBookBRF = document.getElementById('btnBrailleBookBRF');
+  const btnBrailleBookSTL = document.getElementById('btnBrailleBookSTL');
     const btnRemoveAudio = document.getElementById('btnRemoveAudio');
 
   const updateSaveVis = ()=>{ saveFields.style.display = saveToggle.checked ? 'block':'none'; };
@@ -637,23 +718,61 @@
         });
       }
 
-      // Descargar/abrir subtítulos WebVTT (si hay libro en contexto)
-      if (btnSubtitles){
-        btnSubtitles.addEventListener('click', async ()=>{
+      // Descargar Braille (PDF) del libro completo
+      if (btnBrailleBook){
+        btnBrailleBook.addEventListener('click', async ()=>{
           try{
             const raw = document.getElementById('bookData')?.textContent || '{}';
             const book = JSON.parse(raw||'{}');
-            if (!book || !book._id){ return; }
-            const r = await fetch(`/api/subtitles/${book._id}`);
-            if (!r.ok){ alert('No se pudieron generar subtítulos.'); return; }
-            const vtt = await r.text();
-            const blob = new Blob([vtt], { type: 'text/vtt' });
+            if (!book || !book._id){ alert('Abre un libro para generar Braille.'); return; }
+            const r = await fetch(`/api/braille/pdf/book/${book._id}`);
+            if (!r.ok){ try{ const err = await r.json(); alert(err.error||'No se pudo generar el PDF Braille.'); }catch(_){ alert('No se pudo generar el PDF Braille.'); } return; }
+            const blob = await r.blob();
             const url = URL.createObjectURL(blob);
+            const safe = (String(book.title||'contenido').replace(/[^\w\- ]+/g,'').trim() || 'contenido');
             const a = document.createElement('a');
-            a.href = url; a.download = `${(book.title||'subtitulos')}.vtt`;
+            a.href = url; a.download = `braille_${safe}.pdf`;
             document.body.appendChild(a); a.click(); a.remove();
             URL.revokeObjectURL(url);
-          }catch(e){ alert('Error al generar subtítulos'); }
+          }catch(_){ alert('Error al generar el PDF Braille.'); }
+        });
+      }
+
+      if (btnBrailleBookBRF){
+        btnBrailleBookBRF.addEventListener('click', async ()=>{
+          try{
+            const raw = document.getElementById('bookData')?.textContent || '{}';
+            const book = JSON.parse(raw||'{}');
+            if (!book || !book._id){ alert('Abre un libro para generar Braille.'); return; }
+            const r = await fetch(`/api/braille/brf/book/${book._id}`);
+            if (!r.ok){ try{ const err = await r.json(); alert(err.error||'No se pudo generar el BRF.'); }catch(_){ alert('No se pudo generar el BRF.'); } return; }
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const safe = (String(book.title||'contenido').replace(/[^\w\- ]+/g,'').trim() || 'contenido');
+            const a = document.createElement('a');
+            a.href = url; a.download = `braille_${safe}.brf`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+          }catch(_){ alert('Error al generar el archivo BRF.'); }
+        });
+      }
+
+      if (btnBrailleBookSTL){
+        btnBrailleBookSTL.addEventListener('click', async ()=>{
+          try{
+            const raw = document.getElementById('bookData')?.textContent || '{}';
+            const book = JSON.parse(raw||'{}');
+            if (!book || !book._id){ alert('Abre un libro para generar Braille.'); return; }
+            const r = await fetch(`/api/braille/stl/book/${book._id}`);
+            if (!r.ok){ try{ const err = await r.json(); alert(err.error||'No se pudo generar el STL.'); }catch(_){ alert('No se pudo generar el STL.'); } return; }
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const safe = (String(book.title||'contenido').replace(/[^\w\- ]+/g,'').trim() || 'contenido');
+            const a = document.createElement('a');
+            a.href = url; a.download = `braille_${safe}.stl`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+          }catch(_){ alert('Error al generar el modelo STL.'); }
         });
       }
     })();
@@ -702,7 +821,8 @@
           }
           lastIndex = idx;
           const current = spans[Math.max(0, Math.min(idx, spans.length - 1))];
-          if (current) current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Solo desplazar automáticamente si el usuario lo habilitó
+          if (autoFollowNarration && current) current.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         // Limpiar listeners previos si existieran
@@ -714,6 +834,16 @@
         audio.addEventListener('seeked', updateHighlight);
         audio.addEventListener('loadedmetadata', updateHighlight);
         updateHighlight();
+
+        // Si el usuario interactúa con el área de texto, desactivar seguimiento
+        const disableFollow = ()=>{ if (autoFollowNarration){ autoFollowNarration=false; refreshFollowToggle(); } };
+        try{
+          container.addEventListener('wheel', disableFollow, { passive:true });
+          container.addEventListener('touchstart', disableFollow, { passive:true });
+          container.addEventListener('pointerdown', disableFollow, { passive:true });
+        }catch(_){ }
+        // Refrescar el botón (por si se reinicializa el texto)
+        refreshFollowToggle();
       };
 
   // Inicialización con el libro recibido desde el backend (si existe)
@@ -813,6 +943,167 @@
           }).catch(()=>{ quickList.innerHTML = '<div style="opacity:.7;padding:0.5rem 1.5rem;">No disponible</div>'; });
         }
       }
+    })();
+  </script>
+  <script>
+    // Asistente IA para resumen y notas en el reproductor
+    (function(){
+      const openBtn = document.getElementById('aiOpen');
+      const modal = document.getElementById('aiModal');
+      const closeBtn = document.getElementById('aiClose');
+  const doSummary = document.getElementById('aiDoSummary');
+  const doNotes = document.getElementById('aiDoNotes');
+  const doQuiz = document.getElementById('aiDoQuiz');
+      const out = document.getElementById('aiOutput');
+      const hint = document.getElementById('aiStatus');
+      const act = document.getElementById('aiActions');
+      const copyBtn = document.getElementById('aiCopy');
+      const dlBtn = document.getElementById('aiDownload');
+  const brailleBtn = document.getElementById('aiBraille');
+  const brailleBtnBRF = document.getElementById('aiBrailleBRF');
+  const brailleBtnSTL = document.getElementById('aiBrailleSTL');
+  const speakBtn = document.getElementById('aiSpeak');
+  const stopBtn = document.getElementById('aiStop');
+
+      function getBook(){ try{ const raw=document.getElementById('bookData')?.textContent||'{}'; return JSON.parse(raw||'{}'); }catch(_){ return {}; } }
+      function ensureBookId(){ const b=getBook(); return b && b._id ? String(b._id) : ''; }
+      function showModal(){ if (modal) modal.style.display='flex'; out.style.display='none'; act.style.display='none'; hint.textContent='Elige una acción.'; }
+      function hideModal(){ if (modal) modal.style.display='none'; }
+      if (openBtn) openBtn.addEventListener('click', showModal);
+      if (closeBtn) closeBtn.addEventListener('click', hideModal);
+
+      async function runSummary(){
+        const id = ensureBookId(); if (!id){ hint.textContent='Abre un libro para usar la IA.'; out.style.display='none'; act.style.display='none'; return; }
+        hint.textContent = 'Generando resumen…'; out.style.display='none'; act.style.display='none';
+        try{
+          const r = await fetch(`/api/summarize/${id}`, { method: 'POST' });
+          const data = await r.json();
+          if (!r.ok){ hint.textContent = data.error || 'No se pudo generar el resumen.'; return; }
+          const txt = String(data.summary||''); out.textContent = txt; out.style.display='block'; hint.textContent = 'Resumen listo.'; act.style.display='flex';
+        }catch(_){ hint.textContent='Error de red al generar resumen.'; }
+      }
+
+      async function runNotes(){
+        const id = ensureBookId(); if (!id){ hint.textContent='Abre un libro para usar la IA.'; out.style.display='none'; act.style.display='none'; return; }
+        hint.textContent = 'Generando notas…'; out.style.display='none'; act.style.display='none';
+        try{
+          const r = await fetch(`/api/notes/${id}`);
+          const data = await r.json();
+          if (!r.ok){ hint.textContent = data.error || 'No se pudieron generar las notas.'; return; }
+          const arr = Array.isArray(data.notes)? data.notes: [];
+          const txt = arr.length ? '• ' + arr.join('\n• ') : 'Sin notas.'; out.textContent = txt; out.style.display='block'; hint.textContent = 'Notas listas.'; act.style.display='flex';
+        }catch(_){ hint.textContent='Error de red al generar notas.'; }
+      }
+
+      async function runQuiz(){
+        const id = ensureBookId(); if (!id){ hint.textContent='Abre un libro para usar la IA.'; out.style.display='none'; act.style.display='none'; return; }
+        hint.textContent = 'Generando preguntas de repaso…'; out.style.display='none'; act.style.display='none';
+        try{
+          const r = await fetch(`/api/quiz/${id}`);
+          const data = await r.json();
+          if (!r.ok){ hint.textContent = data.error || 'No se pudieron generar las preguntas.'; return; }
+          const quiz = Array.isArray(data.quiz)? data.quiz: [];
+          if (!quiz.length){ hint.textContent = 'No hay preguntas disponibles.'; return; }
+          // Render como preguntas y respuestas; mostrar respuestas con un marcador
+          const lines = quiz.map(item=>{
+            const q = (item.q||'').toString().trim();
+            const a = (item.a||'').toString().trim();
+            if (a){ return `Pregunta: ${q}\nRespuesta: ${a}`; }
+            return `Pregunta: ${q}`;
+          });
+          const txt = lines.join('\n\n');
+          out.textContent = txt; out.style.display='block'; hint.textContent = 'Preguntas listas.'; act.style.display='flex';
+        }catch(_){ hint.textContent='Error de red al generar preguntas.'; }
+      }
+
+      if (doSummary) doSummary.addEventListener('click', runSummary);
+      if (doNotes) doNotes.addEventListener('click', runNotes);
+  if (doQuiz) doQuiz.addEventListener('click', runQuiz);
+
+      if (copyBtn){ copyBtn.addEventListener('click', ()=>{ try{ navigator.clipboard.writeText(out.textContent||''); hint.textContent='Copiado.'; }catch(_){ hint.textContent='No se pudo copiar.'; } }); }
+      if (dlBtn){ dlBtn.addEventListener('click', ()=>{
+        try{
+          const b = getBook(); const name = (b && b.title) ? (String(b.title).replace(/[^\w\- ]+/g,'').trim() || 'contenido') : 'contenido';
+          const blob = new Blob([out.textContent||''], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${name}.txt`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        }catch(_){ hint.textContent='No se pudo descargar.'; }
+      }); }
+
+      if (brailleBtn){ brailleBtn.addEventListener('click', async ()=>{
+        const txt = (out.textContent||'').trim(); if (!txt){ hint.textContent='Nada para convertir a Braille.'; return; }
+        try{
+          const b = getBook(); const title = b && b.title ? String(b.title) : 'contenido';
+          hint.textContent='Generando PDF Braille…';
+          const r = await fetch('/api/braille/pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: txt, title })
+          });
+          if (!r.ok){ try{ const err = await r.json(); hint.textContent = err.error || 'No se pudo generar el PDF.'; }catch(_){ hint.textContent='No se pudo generar el PDF.'; } return; }
+          const blob = await r.blob();
+          const url = URL.createObjectURL(blob);
+          const safe = (title.replace(/[^\w\- ]+/g,'').trim() || 'contenido');
+          const a = document.createElement('a'); a.href = url; a.download = `braille_${safe}.pdf`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+          hint.textContent='PDF Braille listo.';
+        }catch(_){ hint.textContent='Error al generar el PDF Braille.'; }
+      }); }
+
+      if (brailleBtnBRF){ brailleBtnBRF.addEventListener('click', async ()=>{
+        const txt = (out.textContent||'').trim(); if (!txt){ hint.textContent='Nada para convertir a Braille.'; return; }
+        try{
+          const b = getBook(); const title = b && b.title ? String(b.title) : 'contenido';
+          hint.textContent='Generando BRF Braille…';
+          const r = await fetch('/api/braille/brf', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: txt, title })
+          });
+          if (!r.ok){ try{ const err = await r.json(); hint.textContent = err.error || 'No se pudo generar el BRF.'; }catch(_){ hint.textContent='No se pudo generar el BRF.'; } return; }
+          const blob = await r.blob(); const url = URL.createObjectURL(blob);
+          const safe = (title.replace(/[^\w\- ]+/g,'').trim() || 'contenido');
+          const a = document.createElement('a'); a.href = url; a.download = `braille_${safe}.brf`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+          hint.textContent='BRF listo.';
+        }catch(_){ hint.textContent='Error al generar el BRF.'; }
+      }); }
+
+      if (brailleBtnSTL){ brailleBtnSTL.addEventListener('click', async ()=>{
+        const txt = (out.textContent||'').trim(); if (!txt){ hint.textContent='Nada para convertir a Braille 3D.'; return; }
+        try{
+          const b = getBook(); const title = b && b.title ? String(b.title) : 'contenido';
+          hint.textContent='Generando STL Braille…';
+          const r = await fetch('/api/braille/stl', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: txt, title })
+          });
+          if (!r.ok){ try{ const err = await r.json(); hint.textContent = err.error || 'No se pudo generar el STL.'; }catch(_){ hint.textContent='No se pudo generar el STL.'; } return; }
+          const blob = await r.blob(); const url = URL.createObjectURL(blob);
+          const safe = (title.replace(/[^\w\- ]+/g,'').trim() || 'contenido');
+          const a = document.createElement('a'); a.href = url; a.download = `braille_${safe}.stl`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+          hint.textContent='STL listo.';
+        }catch(_){ hint.textContent='Error al generar el STL.'; }
+      }); }
+
+      // Lectura en voz alta (Web Speech). Solo si el profesor pulsa el botón.
+      function isAnyAudioPlaying(){ try{ const auds=[...document.querySelectorAll('audio')]; return auds.some(a=>a && !a.paused && !a.ended && a.currentTime>0); }catch(_){ return false; } }
+  function pauseAnyAudio(){ try{ const auds=[...document.querySelectorAll('audio')]; auds.forEach(a=>{ try{ a.pause(); }catch(_){ } }); }catch(_){ } }
+      function speakText(txt){
+        try{
+          if (!('speechSynthesis' in window)) { hint.textContent='Tu navegador no soporta lectura en voz alta.'; return; }
+          const u = new SpeechSynthesisUtterance(txt);
+          u.lang = 'es-ES'; u.rate = 1.0; u.pitch = 1.0;
+          u.onend = ()=>{ hint.textContent='Lectura terminada.'; };
+          u.onerror = ()=>{ hint.textContent='No se pudo leer en voz alta.'; };
+          window.speechSynthesis.speak(u);
+        }catch(_){ hint.textContent='Error iniciando la lectura.'; }
+      }
+      if (speakBtn){ speakBtn.addEventListener('click', ()=>{
+        const txt = (out.textContent||'').trim(); if (!txt){ hint.textContent='Nada para leer.'; return; }
+        if (isAnyAudioPlaying()){
+          const ok = confirm('La narración está en curso. ¿Pausar y leer el contenido en voz alta?');
+          if (!ok){ hint.textContent='Cancela la narración para escuchar la lectura.'; return; }
+          pauseAnyAudio();
+        }
+        hint.textContent='Leyendo…';
+        speakText(txt);
+      }); }
+      if (stopBtn){ stopBtn.addEventListener('click', ()=>{ try{ window.speechSynthesis.cancel(); hint.textContent='Lectura detenida.'; }catch(_){ } }); }
     })();
   </script>
 </body>

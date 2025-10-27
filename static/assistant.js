@@ -7,12 +7,37 @@
     prefs: JSON.parse(localStorage.getItem('sinsay:prefs')||'{}'),
   };
 
-  function speak(text, lang='es-ES'){
+  // Non-overlapping assistant TTS: queue speech until all page audios are idle
+  let speakChain = Promise.resolve();
+  function isAnyAudioPlaying(){
     try{
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang;
-      speechSynthesis.speak(u);
-    }catch(e){ console.warn('speechSynthesis error', e); }
+      const audios = Array.from(document.querySelectorAll('audio'));
+      return audios.some(a => a && !a.paused && !a.ended && a.currentTime > 0);
+    }catch(_){ return false; }
+  }
+  function waitForAudioIdle(timeoutMs=120000){
+    return new Promise(resolve =>{
+      if (!isAnyAudioPlaying()) return resolve();
+      const audios = Array.from(document.querySelectorAll('audio'));
+      let done=false; const tryResolve = ()=>{ if (!done && !isAnyAudioPlaying()){ done=true; cleanup(); resolve(); } };
+      const onStop = ()=> tryResolve();
+      const cleanup = ()=>{ audios.forEach(a=>{ try{ a.removeEventListener('pause', onStop); a.removeEventListener('ended', onStop); }catch(_){} }); if (tid) clearTimeout(tid); if (intId) clearInterval(intId); };
+      audios.forEach(a=>{ try{ a.addEventListener('pause', onStop, { once:false }); a.addEventListener('ended', onStop, { once:false }); }catch(_){} });
+      const intId = setInterval(tryResolve, 500);
+      const tid = setTimeout(()=>{ if (!done){ done=true; cleanup(); resolve(); } }, timeoutMs);
+    });
+  }
+  function speak(text, lang='es-ES'){
+    speakChain = speakChain.then(async ()=>{
+      await waitForAudioIdle();
+      // also wait if TTS currently speaking
+      await new Promise(r=>{ if (!speechSynthesis.speaking) return r(); const chk=setInterval(()=>{ if (!speechSynthesis.speaking){ clearInterval(chk); r(); } }, 100); });
+      try{
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = lang;
+        return new Promise(res=>{ u.onend=()=>res(); u.onerror=()=>res(); speechSynthesis.speak(u); });
+      }catch(e){ console.warn('speechSynthesis error', e); }
+    });
   }
 
   function saveCustom(){ localStorage.setItem('sinsay:customCmds', JSON.stringify(state.custom)); }

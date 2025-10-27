@@ -149,9 +149,9 @@
 				<a class="sidebar-item active" href="{{ url_for('home') }}">Inicio</a>
 				<a class="sidebar-item" href="{{ url_for('biblioteca') }}">Biblioteca</a>
 				<a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
+				<a class="sidebar-item" href="{{ url_for('recientes') }}">Recientes</a>
 				<a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
-				
-				<a class="sidebar-item" href="{{ url_for('index') }}">Convertir a Audio</a>
+				<a class="sidebar-item" href="{{ url_for('subir_libro') }}">Subir Libro</a>
 			</div>
 		</aside>
 
@@ -470,9 +470,35 @@
 			const send = document.getElementById('aiSend');
 			const mic = document.getElementById('aiMic');
 
+			// ---- Non-overlapping voice: queue assistant TTS until page audio is idle ----
+			let speakChain = Promise.resolve();
+			function isAnyAudioPlaying(){
+				try{
+					const audios = Array.from(document.querySelectorAll('audio'));
+					return audios.some(a => a && !a.paused && !a.ended && a.currentTime > 0);
+				}catch(_){ return false; }
+			}
+			function waitForAudioIdle(timeoutMs=120000){
+				return new Promise(resolve =>{
+					if (!isAnyAudioPlaying()) return resolve();
+					const audios = Array.from(document.querySelectorAll('audio'));
+					let done = false; const tryResolve = ()=>{ if (!done && !isAnyAudioPlaying()){ done = true; cleanup(); resolve(); } };
+					const onStop = ()=> tryResolve();
+					const cleanup = ()=>{ audios.forEach(a=>{ try{ a.removeEventListener('pause', onStop); a.removeEventListener('ended', onStop); }catch(_){} }); if (tid) clearTimeout(tid); if (intId) clearInterval(intId); };
+					audios.forEach(a=>{ try{ a.addEventListener('pause', onStop, { once:false }); a.addEventListener('ended', onStop, { once:false }); }catch(_){} });
+					const intId = setInterval(tryResolve, 500);
+					const tid = setTimeout(()=>{ if (!done){ done=true; cleanup(); resolve(); } }, timeoutMs);
+				});
+			}
 			function speak(text){
-				try{ if (window.SinsayAssistant && typeof window.SinsayAssistant.speak==='function'){ window.SinsayAssistant.speak(text); return; } }catch(e){}
-				try{ const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; speechSynthesis.speak(u);}catch(e){}
+				// If a shared assistant is available (other pages), delegate but still queue to avoid overlap
+				speakChain = speakChain.then(async ()=>{
+					await waitForAudioIdle();
+					// Also avoid overlapping existing TTS
+					await new Promise(r=>{ if (!speechSynthesis.speaking) return r(); const check = setInterval(()=>{ if (!speechSynthesis.speaking){ clearInterval(check); r(); } }, 100); });
+					try{ if (window.SinsayAssistant && typeof window.SinsayAssistant.speak==='function'){ window.SinsayAssistant.speak(text); return; } }catch(e){}
+					try{ const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; return new Promise(res=>{ u.onend = ()=> res(); u.onerror = ()=> res(); speechSynthesis.speak(u); }); }catch(e){}
+				});
 			}
 			function addMsg(who, text){
 				const row = document.createElement('div'); row.className = 'ai-msg ' + (who==='user'?'user':'bot');
@@ -522,7 +548,14 @@
 					const res = await fetch('/api/assistant/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message: msg }) });
 					let data = {}; try{ data = await res.json(); }catch(_){ data = {}; }
 					clearPending(pending);
-					if (data.speech){ addMsg('bot', data.speech); speak(data.speech); }
+					// If we're going to navigate (which may autoplay narration), avoid speaking to prevent overlap
+					if (data.speech){
+						addMsg('bot', data.speech);
+						if (!(data.action === 'navigate' && data.url)){
+							// Only speak when not navigating to a player page
+							speak(data.speech);
+						}
+					}
 					else { addMsg('bot', data.error || 'Hecho.'); }
 					if (data.action === 'navigate' && data.url){ setTimeout(()=>{ window.location.href = data.url; }, 600); }
 				}catch(e){ clearPending(pending); addMsg('bot','Hubo un problema procesando tu solicitud.'); }
