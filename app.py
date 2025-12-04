@@ -14,24 +14,31 @@ import re
 import io
 import unicodedata
 import math
+import requests
+import json
+import threading
 from datetime import datetime, timedelta
 ELEVEN_AVAILABLE = False
 ELEVEN_USE_LEGACY = False
+ELEVEN_CLIENT_AVAILABLE = False
 try:
-    # Prefer legacy simple API if present
+    # Legacy simple API (generate())
     from elevenlabs import generate as el_generate, set_api_key as el_set_api_key  # type: ignore
     ELEVEN_AVAILABLE = True
     ELEVEN_USE_LEGACY = True
     print("✅ ElevenLabs (legacy API) disponible")
-except Exception:
-    try:
-        # Newer client API
-        from elevenlabs.client import ElevenLabs  # type: ignore
-        ELEVEN_AVAILABLE = True
-        ELEVEN_USE_LEGACY = False
-        print("✅ ElevenLabs (client API) disponible")
-    except Exception as e:
-        print(f"⚠️  ElevenLabs no disponible: {e}")
+except Exception as _e_legacy:
+    print(f"ℹ️  ElevenLabs legacy API no disponible: {_e_legacy}")
+try:
+    # Client API (recomendada cuando usamos voice_id)
+    from elevenlabs.client import ElevenLabs  # type: ignore
+    ELEVEN_AVAILABLE = True
+    ELEVEN_CLIENT_AVAILABLE = True
+    print("✅ ElevenLabs (client API) disponible")
+except Exception as _e_client:
+    print(f"ℹ️  ElevenLabs client API no disponible: {_e_client}")
+if not ELEVEN_AVAILABLE:
+    print("⚠️  ElevenLabs no disponible: no se pudo cargar ni legacy ni client API")
 import docx
 import PyPDF2
 from mutagen.mp3 import MP3  # Para obtener duración de archivos MP3
@@ -65,6 +72,49 @@ load_dotenv()  # Lee variables desde .env si existe
 app = Flask(__name__)
 app.secret_key = "sinsay_secret_key"
 bcrypt = Bcrypt(app)
+
+# Persistencia simple para la preferencia TTS (archivo local)
+SETTINGS_PATH = os.path.join(os.path.dirname(__file__), 'settings.json')
+_settings_lock = threading.Lock()
+
+def _ensure_settings_file():
+    if not os.path.exists(SETTINGS_PATH):
+        try:
+            with open(SETTINGS_PATH, 'w', encoding='utf-8') as fh:
+                json.dump({'tts_primary': 'elevenlabs'}, fh, ensure_ascii=False)
+        except Exception:
+            pass
+
+def get_tts_primary():
+    """Devuelve la preferencia primaria de TTS (persistente en disk)."""
+    try:
+        if not os.path.exists(SETTINGS_PATH):
+            _ensure_settings_file()
+        with open(SETTINGS_PATH, 'r', encoding='utf-8') as fh:
+            data = json.load(fh) or {}
+            return (data.get('tts_primary') or 'elevenlabs').lower()
+    except Exception:
+        return 'elevenlabs'
+
+def set_tts_primary(value: str):
+    try:
+        with _settings_lock:
+            data = {}
+            if os.path.exists(SETTINGS_PATH):
+                try:
+                    with open(SETTINGS_PATH, 'r', encoding='utf-8') as fh:
+                        data = json.load(fh) or {}
+                except Exception:
+                    data = {}
+            data['tts_primary'] = (value or 'elevenlabs').lower()
+            with open(SETTINGS_PATH, 'w', encoding='utf-8') as fh:
+                json.dump(data, fh, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+_ensure_settings_file()
+print(f"🎚️ TTS primario persistente: {get_tts_primary()}")
 
 # Estado simple para diagnóstico de TTS
 LAST_TTS_STATUS = {
@@ -112,19 +162,28 @@ except Exception as e:
 
 # ElevenLabs API (principal TTS)
 ELEVEN_API_KEY = os.environ.get("ELEVEN_API_KEY")
-if ELEVEN_AVAILABLE and ELEVEN_API_KEY:
+ELEVEN_CLIENT = None
+if ELEVEN_AVAILABLE:
     try:
-        if ELEVEN_USE_LEGACY:
+        # Si tenemos la clave y estamos usando la API legacy, configurarla.
+        if ELEVEN_API_KEY and ELEVEN_USE_LEGACY:
             el_set_api_key(ELEVEN_API_KEY)
+        # Inicializar cliente singleton si es posible
+        if ELEVEN_CLIENT_AVAILABLE and ELEVEN_API_KEY:
+            try:
+                ELEVEN_CLIENT = ElevenLabs(api_key=ELEVEN_API_KEY)
+                print("🔧 ElevenLabs client singleton inicializado")
+            except Exception as _e:
+                ELEVEN_CLIENT = None
+                print(f"⚠️ No se pudo crear ElevenLabs client singleton: {_e}")
+        # Si no está la clave, el cliente se instanciará de forma perezosa
+        # dentro de la función de generación; no bloqueamos el uso aquí.
+        if ELEVEN_API_KEY:
+            print("🔑 Clave ElevenLabs configurada (*** oculto)")
         else:
-            # instantiate client lazily in generator function
-            pass
-        print("🔑 Clave ElevenLabs configurada (*** oculto)")
+            print("⚠️  ELEVEN_API_KEY no configurada; intentaremos usar ElevenLabs y aplicaremos fallback si falla")
     except Exception as e:
         print(f"⚠️  No se pudo configurar ElevenLabs: {e}")
-else:
-    if ELEVEN_AVAILABLE:
-        print("⚠️  ELEVEN_API_KEY no configurada; ElevenLabs no se usará")
 
 # Google Cloud API Key (para Text-to-Speech)
 os.environ['GOOGLE_API_KEY'] = "AIzaSyBe1bC2-gepvvQdGza9i7O-X6WwEIYNfmo"
@@ -235,28 +294,44 @@ def generate_audio_with_google_tts(text, language_code='es-ES', output_file=None
 
 def generate_audio_with_elevenlabs(text: str, voice_id: str = None, model: str = None) -> bytes:
     """Genera audio con ElevenLabs y devuelve bytes MP3.
-    Usa API legacy si está disponible, si no usa el client API.
+    Intenta primero el Client API (acepta voice_id); si falla, intenta Legacy API.
     """
-    if not ELEVEN_AVAILABLE:
-        raise Exception("ElevenLabs no está disponible (módulo no importado)")
-    if not ELEVEN_API_KEY:
-        raise Exception("ELEVEN_API_KEY no configurada")
+    # Permitir usar la ruta HTTP directa incluso si las librerías/SDK no están instaladas,
+    # siempre que exista una clave en `ELEVEN_API_KEY`.
+    if not ELEVEN_AVAILABLE and not ELEVEN_API_KEY:
+        raise Exception("ElevenLabs no está disponible y no hay ELEVEN_API_KEY configurada")
+
     voice = voice_id or os.environ.get('ELEVEN_VOICE_ID') or 'Rachel'
     mdl = model or os.environ.get('ELEVEN_MODEL', 'eleven_multilingual_v2')
-    print(f"🎙️  Usando ElevenLabs: voice={voice}, model={mdl}")
-    if ELEVEN_USE_LEGACY:
-        # Legacy simple API
+    print(f"🎙️  Usando ElevenLabs preferentemente vía Client API: voice={voice}, model={mdl}")
+
+    last_error = None
+
+    # Utilidad HTTP directa a la API de ElevenLabs (evita dependencias del SDK)
+    def _http_eleven_tts(api_key: str, v_id: str, txt: str, mdl: str) -> bytes:
+        import json as _json
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{v_id}"
+        headers = {
+            'xi-api-key': api_key,
+            'Accept': 'audio/mpeg',
+            'Content-Type': 'application/json',
+        }
+        payload = {
+            'text': txt,
+            'model_id': mdl,
+        }
+        resp = requests.post(url, headers=headers, data=_json.dumps(payload), timeout=120)
+        if resp.status_code >= 400:
+            raise Exception(f"HTTP {resp.status_code}: {resp.text[:200]}")
+        content = resp.content or b''
+        if not content:
+            raise Exception("Respuesta vacía de ElevenLabs HTTP")
+        return content
+
+    # 1) Client API (preferido para voice_id)
+    if ELEVEN_CLIENT_AVAILABLE:
         try:
-            audio_bytes = el_generate(text=text, voice=voice, model=mdl)
-            return audio_bytes
-        except Exception as e:
-            raise Exception(f"ElevenLabs (legacy) falló: {e}")
-    else:
-        # Client API
-        try:
-            client = ElevenLabs(api_key=ELEVEN_API_KEY)
-            # text_to_speech.convert returns a stream; assemble bytes
-            # API signature may vary by version; handle expected params
+            client = ELEVEN_CLIENT if ELEVEN_CLIENT is not None else ElevenLabs(api_key=ELEVEN_API_KEY)
             response = client.text_to_speech.convert(
                 voice_id=voice,
                 optimize_streaming_latency=0,
@@ -264,14 +339,47 @@ def generate_audio_with_elevenlabs(text: str, voice_id: str = None, model: str =
                 model_id=mdl,
                 text=text,
             )
-            # response is a generator of chunks
             chunks = []
             for chunk in response:
-                # each chunk is bytes
                 chunks.append(chunk)
-            return b''.join(chunks)
+            audio = b''.join(chunks)
+            if not audio:
+                raise Exception("Respuesta vacía del Client API")
+            return audio
         except Exception as e:
-            raise Exception(f"ElevenLabs (client) falló: {e}")
+            last_error = e
+            print(f"⚠️  ElevenLabs (client) falló: {e}")
+
+    # 2) HTTP directo (independiente del SDK)
+    try:
+        audio_http = _http_eleven_tts(ELEVEN_API_KEY, voice, text, mdl)
+        return audio_http
+    except Exception as e:
+        last_error = e
+        print(f"⚠️  ElevenLabs (HTTP) falló: {e}")
+
+    # 3) Legacy API (acepta nombres de voz y algunos ids en versiones recientes)
+    if ELEVEN_USE_LEGACY:
+        try:
+            # Si parece un voice_id (no un nombre), el legacy API puede fallar; usar nombre por defecto
+            use_voice = voice
+            try:
+                import re as _re
+                if isinstance(voice, str) and _re.fullmatch(r'[A-Za-z0-9]{16,}', voice):
+                    use_voice = os.environ.get('ELEVEN_VOICE_NAME', 'Rachel')
+                    print(f"ℹ️  Legacy API: voice_id detectado; usando nombre de voz '{use_voice}'")
+            except Exception:
+                pass
+            audio_bytes = el_generate(text=text, voice=use_voice, model=mdl)
+            if not audio_bytes:
+                raise Exception("Respuesta vacía del Legacy API")
+            return audio_bytes
+        except Exception as e:
+            last_error = e
+            print(f"⚠️  ElevenLabs (legacy) falló: {e}")
+
+    # Si llegó aquí, ambos intentos fallaron
+    raise Exception(f"ElevenLabs no pudo generar audio: {last_error}")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -491,128 +599,23 @@ def descubrir():
         return redirect(url_for('login'))
     return render_template('Descubrir.html')
 
-# Ruta habilitada: página para subir libros manualmente
 @app.route('/subir_libro', methods=['GET', 'POST'])
 def subir_libro():
+    """Página/endpoint de subir libro: deprecado.
+    - GET: redirige al convertidor principal (/index)
+    - POST: responde con error indicando endpoint deprecado y alternativas.
+    """
     if 'usuario_id' not in session:
         return redirect(url_for('login'))
-    
+
     if request.method == 'GET':
-        return render_template('subir_libro.html')
-    
-    # POST - Procesar el formulario
-    try:
-        print("\n📚 SUBIR LIBRO - Guardando nuevo libro en la biblioteca")
-        
-        # Verificar que hay un archivo de audio
-        if 'audioFile' not in request.files:
-            return jsonify({'error': 'No se proporcionó el archivo de audio'}), 400
-        
-        audio_file = request.files['audioFile']
-        if audio_file.filename == '':
-            return jsonify({'error': 'No se seleccionó ningún archivo de audio'}), 400
-        
-        # Validar que sea MP3
-        if not audio_file.filename.lower().endswith('.mp3'):
-            return jsonify({'error': 'El archivo de audio debe ser formato MP3'}), 400
-        
-        # Obtener datos del formulario
-        title = request.form.get('title', '').strip()
-        subtitle = request.form.get('subtitle', '').strip()
-        category = request.form.get('category', '').strip()
-        level = request.form.get('level', '').strip()
-        content_text = request.form.get('contentText', '').strip()
-        
-        # Validar campos requeridos
-        if not all([title, subtitle, category, level]):
-            return jsonify({'error': 'Todos los campos son requeridos'}), 400
-        
-        timestamp = int(time.time())
-        
-        # Guardar archivo de audio
-        audio_filename = secure_filename(audio_file.filename)
-        unique_audio_filename = f"{timestamp}_audio_{audio_filename}"
-        audio_filepath = os.path.join(app.config['AUDIO_FOLDER'], unique_audio_filename)
-        audio_file.save(audio_filepath)
-        
-        print(f"🎵 Archivo de audio guardado: {unique_audio_filename}")
-        
-        # Calcular duración del audio
-        try:
-            audio = MP3(audio_filepath)
-            duration_seconds = int(audio.info.length)
-            
-            # Formatear duración
-            if duration_seconds < 60:
-                duration = f"{duration_seconds} seg"
-            elif duration_seconds < 3600:
-                minutes = duration_seconds // 60
-                seconds = duration_seconds % 60
-                duration = f"{minutes} min {seconds} seg" if seconds > 0 else f"{minutes} min"
-            else:
-                hours = duration_seconds // 3600
-                minutes = (duration_seconds % 3600) // 60
-                duration = f"{hours}h {minutes}min" if minutes > 0 else f"{hours}h"
-            
-            print(f"⏱️  Duración del audio: {duration}")
-        except Exception as e:
-            print(f"⚠️  No se pudo calcular la duración del audio: {e}")
-            duration = "Duración no disponible"
-        
-        # Mapeo de categorías a etiquetas visuales
-        category_labels = {
-            'historia': 'Historia',
-            'cuentos': 'Cuentos',
-            'novelas': 'Novelas',
-            'aprendizaje': 'Aprendizaje',
-            'biologia': 'Biología',
-            'ciencia': 'Ciencia',
-            'tecnologia': 'Tecnología',
-            'arte': 'Arte',
-            'noticias': 'Noticias'
-        }
-        
-        level_labels = {
-            'facil': 'Fácil',
-            'medio': 'Medio',
-            'alta': 'Alta'
-        }
-        
-        # Crear documento para MongoDB
-        libro_data = {
-            'title': title,
-            'subtitle': subtitle,
-            'category': category,
-            'categoryLabel': category_labels.get(category, category.title()),
-            'level': level,
-            'levelLabel': level_labels.get(level, level.title()),
-            'duration': duration,
-            'duration_seconds': duration_seconds,
-            'audio_filename': unique_audio_filename,
-            'audio_url': f'/audio_files/{unique_audio_filename}',
-            'text': content_text if content_text else None,
-            'uploaded_by': session['usuario_id'],
-            'uploaded_at': timestamp,
-            'created_at': time.strftime('%Y-%m-%d %H:%M:%S')
-        }
-        
-        # Guardar en MongoDB
-        if libros_collection is not None:
-            result = libros_collection.insert_one(libro_data)
-            print(f"📚 Libro guardado en MongoDB con ID: {result.inserted_id}")
-            
-            return jsonify({
-                'message': f'Libro "{title}" guardado exitosamente en la biblioteca',
-                'libro_id': str(result.inserted_id)
-            }), 200
-        else:
-            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
-            
-    except Exception as e:
-        print(f"❌ ERROR al guardar libro: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Error al guardar el libro: {str(e)}'}), 500
+        # Redirigir al flujo principal de conversión/guardado
+        return redirect(url_for('index'))
+
+    # POST: deprecado
+    return jsonify({
+        'error': 'Este endpoint está deprecado. Usa /upload con saveToLibrary o las opciones de guardado en /index.'
+    }), 410
 
 @app.route('/api/libros', methods=['GET'])
 def obtener_libros():
@@ -637,6 +640,24 @@ def obtener_libros():
                     libro['parent_id'] = str(libro['parent_id'])
                 except Exception:
                     pass
+
+            # Normalizar audio_url: si no existe o es relativo, intentar construirlo a partir de audio_filename
+            try:
+                au = libro.get('audio_url') or ''
+                filename = libro.get('audio_filename') or ''
+                if not au and filename:
+                    au = f"/audio_files/{filename}"
+                    libro['audio_url'] = au
+
+                # Si la ruta es relativa (empieza con '/') devolver también la URL absoluta para evitar problemas de origin
+                if isinstance(au, str) and au.startswith('/'):
+                    host = (request.host_url or '').rstrip('/')
+                    libro['audio_url_absolute'] = f"{host}{au}"
+                else:
+                    libro['audio_url_absolute'] = libro.get('audio_url')
+            except Exception:
+                # No fallar la API por un libro mal formado
+                libro['audio_url_absolute'] = libro.get('audio_url')
         
         return jsonify({'libros': libros}), 200
     except Exception as e:
@@ -734,7 +755,14 @@ def reproductor(book_id):
         return redirect(url_for('biblioteca'))
 
     try:
-        libro = libros_collection.find_one({'_id': ObjectId(book_id)})
+        # Soportar búsqueda por ObjectId o por string _id (datos antiguos o inconsistencias)
+        query = {'$or': []}
+        try:
+            query['$or'].append({'_id': ObjectId(book_id)})
+        except Exception:
+            pass
+        query['$or'].append({'_id': book_id})
+        libro = libros_collection.find_one(query)
         if not libro:
             return redirect(url_for('biblioteca'))
 
@@ -918,10 +946,10 @@ def upload():
             print(f"⚠️  Texto muy largo ({len(text)} chars), limitando a {MAX_CHARS}")
             text = text[:MAX_CHARS] + "..."
         
-        # TTS: ElevenLabs como principal, Google como respaldo
+        # TTS: usar preferencia persistente, ElevenLabs por defecto
         audio = None
         tts_engine_used = None
-        primary = (os.environ.get('TTS_PRIMARY') or 'elevenlabs').lower()
+        primary = get_tts_primary()
         engines = []
         if primary == 'elevenlabs':
             engines = ['elevenlabs', 'google']
@@ -933,7 +961,6 @@ def upload():
         last_err = None
         for eng in engines:
             if eng == 'elevenlabs':
-                if ELEVEN_AVAILABLE and ELEVEN_API_KEY:
                     try:
                         audio = generate_audio_with_elevenlabs(text, voice_id=voice_id)
                         tts_engine_used = 'ElevenLabs'
@@ -942,8 +969,6 @@ def upload():
                     except Exception as e:
                         print(f"⚠️  ElevenLabs falló: {e}")
                         last_err = e
-                else:
-                    print("ℹ️  ElevenLabs no disponible o sin API KEY; saltando…")
             elif eng == 'google':
                 if GOOGLE_TTS_AVAILABLE:
                     try:
@@ -1073,6 +1098,8 @@ def upload():
                 'duration_seconds': duration_seconds,
                 'audio_filename': audio_filename,
                 'audio_url': audio_url,
+                'voice_id': voice_id,
+                'tts_engine': tts_engine_used,
                 # Guardar el texto que realmente se usó para el TTS (posiblemente truncado)
                 'text': text,
                 'summary': ai_summary,
@@ -1484,10 +1511,11 @@ def api_tts_status():
     try:
         status = {
             'eleven_available': bool(ELEVEN_AVAILABLE),
+            'eleven_client_available': bool(ELEVEN_CLIENT_AVAILABLE),
             'eleven_api_key_present': bool(ELEVEN_API_KEY),
             'eleven_api_mode': ('legacy' if ELEVEN_USE_LEGACY else ('client' if ELEVEN_AVAILABLE else None)),
             'google_available': bool(GOOGLE_TTS_AVAILABLE),
-            'tts_primary': (os.environ.get('TTS_PRIMARY') or 'elevenlabs').lower(),
+            'tts_primary': get_tts_primary(),
             'last': LAST_TTS_STATUS,
         }
         return jsonify(status)
@@ -1565,6 +1593,8 @@ def api_save_orphan_audio(filename):
             'duration_seconds': duration_seconds,
             'audio_filename': safe_name,
             'audio_url': audio_url,
+                'voice_id': None,
+                'tts_engine': get_tts_primary(),
             'text': '',
             'summary': None,
             'uploaded_by': session.get('usuario_id'),
@@ -1655,6 +1685,25 @@ def api_delete_book(book_id):
         if not doc:
             print("❌ Libro no encontrado para eliminar")
             return jsonify({'error': 'Libro no encontrado'}), 404
+
+        # Permisos: solo el usuario que subió el libro (o admin) puede eliminarlo
+        # uploaded_by se guarda como string (session usuario_id) en la mayoría de los casos,
+        # pero soportamos ObjectId antiguos: compararemos como str()
+        current_user = session.get('usuario_id')
+        if not current_user:
+            return jsonify({'error': 'No autenticado'}), 401
+
+        uploader = doc.get('uploaded_by')
+        uploader_str = None
+        try:
+            uploader_str = str(uploader)
+        except Exception:
+            uploader_str = None
+
+        if uploader_str and uploader_str != str(current_user):
+            # No permitir a otros usuarios eliminar este libro
+            print(f"⚠️  Usuario {current_user} intentó eliminar libro de {uploader_str}")
+            return jsonify({'error': 'No tienes permisos para eliminar este libro'}), 403
 
         deleted = 0
         audio_deleted = 0
@@ -2146,12 +2195,47 @@ def _char_to_braille_bits(ch: str, in_number: bool):
     else:
         if ch.isspace():
             return [0], False
+
         base = _strip_accents(ch.lower())
         if base and base[0] in _BRAILLE_ALPHA:
             return [_BRAILLE_ALPHA[base[0]]], False
         if ch in _BRAILLE_PUNCT:
             return [_BRAILLE_PUNCT[ch]], False
         return [0], False
+
+
+def _resolve_book(book_id):
+    """Resuelve un documento de `libros_collection` tolerando:
+    - un ObjectId (hex string)
+    - un _id almacenado como string
+    - fallback escaneando documentos y comparando str(_id)
+    Retorna el documento o None si no se encuentra.
+    """
+    if libros_collection is None:
+        return None
+    # 1) intentar como ObjectId
+    try:
+        oid = ObjectId(book_id)
+        doc = libros_collection.find_one({'_id': oid})
+        if doc:
+            return doc
+    except Exception:
+        pass
+    # 2) intentar como string _id
+    try:
+        doc = libros_collection.find_one({'_id': book_id})
+        if doc:
+            return doc
+    except Exception:
+        pass
+    # 3) fallback: escanear y comparar str(_id)
+    try:
+        for d in libros_collection.find({}):
+            if str(d.get('_id')) == str(book_id):
+                return d
+    except Exception:
+        return None
+    return None
 
 
 def _generate_braille_pdf_response(text: str, title: str):
@@ -2234,10 +2318,9 @@ def api_braille_pdf():
 @app.route('/api/braille/pdf/book/<book_id>')
 def api_braille_pdf_book(book_id):
     try:
-        if libros_collection is None:
-            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
-        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
-        if not doc:
+        # Resolver libro de forma tolerante (ObjectId o _id string)
+        doc = _resolve_book(book_id)
+        if doc is None:
             return jsonify({'error': 'Libro no encontrado'}), 404
         text = (doc.get('text') or '').strip()
         if not text:
@@ -2344,10 +2427,8 @@ def api_braille_brf():
 @app.route('/api/braille/brf/book/<book_id>')
 def api_braille_brf_book(book_id):
     try:
-        if libros_collection is None:
-            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
-        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
-        if not doc:
+        doc = _resolve_book(book_id)
+        if doc is None:
             return jsonify({'error': 'Libro no encontrado'}), 404
         text = (doc.get('text') or '').strip()
         if not text:
@@ -2442,10 +2523,8 @@ def api_braille_stl():
 @app.route('/api/braille/stl/book/<book_id>')
 def api_braille_stl_book(book_id):
     try:
-        if libros_collection is None:
-            return jsonify({'error': 'No hay conexión a la base de datos'}), 500
-        doc = libros_collection.find_one({'_id': ObjectId(book_id)})
-        if not doc:
+        doc = _resolve_book(book_id)
+        if doc is None:
             return jsonify({'error': 'Libro no encontrado'}), 404
         text = (doc.get('text') or '').strip()
         if not text:

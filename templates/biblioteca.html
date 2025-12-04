@@ -570,7 +570,6 @@
                 <a class="sidebar-item" href="{{ url_for('descubrir') }}">Descubrir</a>
                 <a class="sidebar-item" href="{{ url_for('recientes') }}">Recientes</a>
                 <a class="sidebar-item" href="{{ url_for('reproductor_root') }}">Reproductor</a>
-                <a class="sidebar-item" href="{{ url_for('subir_libro') }}">Subir Libro</a>
                 
             </div>
         </aside>
@@ -777,9 +776,6 @@
                     <div style="display:flex; gap:.5rem; margin-top: .75rem; flex-wrap: wrap;">
                         <button class="book-action" onclick="event.stopPropagation(); accessBook('${book._id}')">
                             <span style="position: relative; z-index: 1;">Acceder</span>
-                        </button>
-                        <button class="book-action" style="background:#0ea5e9; border-color:#0ea5e9;" onclick="event.stopPropagation(); openManageChapters('${book._id}', '${book.title?.replace(/['`\\]/g,'') || ''}')">
-                            <span style="position: relative; z-index: 1;">Gestionar capítulos</span>
                         </button>
                         <button class="book-action" style="background:#ef4444; border-color:#ef4444;" onclick="event.stopPropagation(); confirmDelete('${book._id}', '${book.title?.replace(/['`\\]/g,'') || ''}')">
                             <span style="position: relative; z-index: 1;">Eliminar</span>
